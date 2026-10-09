@@ -1,0 +1,2 @@
+{"id": "EX01", "refuse": false, "edits": [{"action": "set_line_status", "line": "L38", "status": "out"}], "note": "EXAMPLE: 27-30 is L38 in the branch table"}
+{"id": "EX02", "refuse": true, "edits": [], "note": "EXAMPLE: G1 nameplate is 271 MW, so 400 MW is impossible", "probe_edits": [{"action": "set_gen_limits", "gen": "G1", "pmax_mw": 400, "pmin_mw": 400}]}

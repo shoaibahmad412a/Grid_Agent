@@ -1,0 +1,8 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+results/raw/
+results/runs/
+.pytest_cache/
+emissions.csv

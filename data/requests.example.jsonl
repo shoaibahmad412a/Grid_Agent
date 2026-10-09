@@ -1,0 +1,2 @@
+{"id": "EX01", "group": "outage", "text": "EXAMPLE: the line from bus 27 to bus 30 has tripped and is out of service"}
+{"id": "EX02", "group": "impossible", "text": "EXAMPLE: run generator G1 at 400 MW for the rest of the day"}
