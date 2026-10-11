@@ -55,3 +55,11 @@ def test_build_ground_truth(net):
     sols = [ground_truth_solution(net, t) for t in read_jsonl(EX_GT)]
     assert sols[0]["status"] == "optimal" and sols[0]["canonical_diff"] == {"L38.status": 0}
     assert sols[1]["status"] == "refuse"
+
+
+def test_scenario_table_verdicts():
+    import scenario_table as st
+    assert st.evaluate([{"action": "set_line_status", "line": "L13", "status": "out"}]) == ("CHECKER", "R8_ISLANDING")
+    assert st.evaluate([{"action": "set_line_status", "line": "L1", "status": "out"}])[0] == "R10"
+    assert st.evaluate([{"action": "set_line_status", "line": "L38", "status": "out"}])[0] == "OK"
+    assert 1.28 < st.max_load_factor(5) < 1.30

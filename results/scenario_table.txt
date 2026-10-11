@@ -1,0 +1,118 @@
+SCENARIO TABLE  base cost 7504 $/h, G1 215.8 MW, G2 67.6 MW, binding ['L1']
+Verdict: OK = doable (feasible DC-OPF); CHECKER = a rule refuses it; R10 = passes rules but no feasible dispatch.
+
+1. LINE OUTAGES (every branch)
+  L1 out (1-2)                      R10      OPF infeasible
+  L2 out (1-3)                      R10      OPF infeasible
+  L3 out (2-4)                      OK          6837 $/h ( -8.9%)  G1 235.5  G2  47.9  binding L1
+  L4 out (3-4)                      R10      OPF infeasible
+  L5 out (2-5)                      OK          6805 $/h ( -9.3%)  G1 236.5  G2  46.9  binding L1
+  L6 out (2-6)                      OK          6798 $/h ( -9.4%)  G1 236.7  G2  46.7  binding L1
+  L7 out (4-6)                      OK          8313 $/h (+10.8%)  G1 191.8  G2  91.6  binding L1
+  L8 out (5-7)                      OK          7642 $/h ( +1.8%)  G1 211.7  G2  71.7  binding L1
+  L9 out (6-7)                      OK          7845 $/h ( +4.5%)  G1 205.7  G2  77.7  binding L1
+  L10 out (6-8)                     OK          7503 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L11 out (6-9)                     OK          7476 $/h ( -0.4%)  G1 216.6  G2  66.8  binding L1
+  L12 out (6-10)                    OK          7491 $/h ( -0.2%)  G1 216.1  G2  67.3  binding L1
+  L13 out (9-11)                    CHECKER  R8_ISLANDING
+  L14 out (9-10)                    OK          7476 $/h ( -0.4%)  G1 216.6  G2  66.8  binding L1
+  L15 out (4-12)                    OK          7610 $/h ( +1.4%)  G1 212.6  G2  70.8  binding L1
+  L16 out (12-13)                   CHECKER  R8_ISLANDING
+  L17 out (12-14)                   OK          7506 $/h ( +0.0%)  G1 215.7  G2  67.7  binding L1
+  L18 out (12-15)                   OK          7515 $/h ( +0.1%)  G1 215.4  G2  68.0  binding L1
+  L19 out (12-16)                   OK          7513 $/h ( +0.1%)  G1 215.5  G2  67.9  binding L1
+  L20 out (14-15)                   OK          7505 $/h ( +0.0%)  G1 215.7  G2  67.7  binding L1
+  L21 out (16-17)                   OK          7508 $/h ( +0.1%)  G1 215.6  G2  67.8  binding L1
+  L22 out (15-18)                   OK          7509 $/h ( +0.1%)  G1 215.6  G2  67.8  binding L1
+  L23 out (18-19)                   OK          7507 $/h ( +0.0%)  G1 215.7  G2  67.7  binding L1
+  L24 out (19-20)                   OK          7499 $/h ( -0.1%)  G1 215.9  G2  67.5  binding L1
+  L25 out (10-20)                   OK          7497 $/h ( -0.1%)  G1 216.0  G2  67.4  binding L1
+  L26 out (10-17)                   OK          7497 $/h ( -0.1%)  G1 216.0  G2  67.4  binding L1
+  L27 out (10-21)                   OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L28 out (10-22)                   OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L29 out (21-22)                   OK          7505 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L30 out (15-23)                   OK          7509 $/h ( +0.1%)  G1 215.6  G2  67.8  binding L1
+  L31 out (22-24)                   OK          7503 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L32 out (23-24)                   OK          7506 $/h ( +0.0%)  G1 215.7  G2  67.7  binding L1
+  L33 out (24-25)                   OK          7502 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L34 out (25-26)                   CHECKER  R8_ISLANDING
+  L35 out (25-27)                   OK          7499 $/h ( -0.1%)  G1 215.9  G2  67.5  binding L1
+  L36 out (28-27)                   OK          7487 $/h ( -0.2%)  G1 216.3  G2  67.1  binding L1
+  L37 out (27-29)                   OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L38 out (27-30)                   OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L39 out (29-30)                   OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L40 out (8-28)                    OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L41 out (6-28)                    OK          7501 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+
+2. LINE DERATES (branches loaded above 40% in the base case)
+  L1 (1-2) 138 -> 124.2 MW          OK          8064 $/h ( +7.5%)  G1 199.2  G2  84.2  binding L1
+  L1 (1-2) 138 -> 103.5 MW          R10      OPF infeasible
+  L1 (1-2) 138 -> 69 MW             R10      OPF infeasible
+  L2 (1-3) 152 -> 136.8 MW          OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L2 (1-3) 152 -> 114 MW            OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L2 (1-3) 152 -> 76 MW             OK          7859 $/h ( +4.7%)  G1 205.3  G2  78.1  binding L2
+  L4 (3-4) 135 -> 121.5 MW          OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L4 (3-4) 135 -> 101.2 MW          OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L4 (3-4) 135 -> 67.5 MW           R10      OPF infeasible
+  L5 (2-5) 144 -> 129.6 MW          OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L5 (2-5) 144 -> 108 MW            OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L5 (2-5) 144 -> 72 MW             R10      OPF infeasible
+  L6 (2-6) 139 -> 125.1 MW          OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L6 (2-6) 139 -> 104.2 MW          OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L6 (2-6) 139 -> 69.5 MW           OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L7 (4-6) 148 -> 133.2 MW          OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L7 (4-6) 148 -> 111 MW            OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  L7 (4-6) 148 -> 74 MW             OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L18 (12-15) 29 -> 26.1 MW         OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L18 (12-15) 29 -> 21.8 MW         OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L18 (12-15) 29 -> 14.5 MW         R10      OPF infeasible
+  L27 (10-21) 30 -> 27 MW           OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L27 (10-21) 30 -> 22.5 MW         OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  L27 (10-21) 30 -> 15 MW           R10      OPF infeasible
+
+3. GENERATORS
+  G1 Pmax 271 -> 243.9 MW (90%)     OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  G1 Pmax 271 -> 203.25 MW (75%)    OK          7927 $/h ( +5.6%)  G1 203.3  G2  80.1  binding -
+  G1 Pmax 271 -> 162.6 MW (60%)     CHECKER  R9_ADEQUACY
+  G1 Pmax 271 -> 135.5 MW (50%)     CHECKER  R9_ADEQUACY
+  G1 out of service                 CHECKER  R9_ADEQUACY
+  G1 cost x0.5                      OK          5517 $/h (-26.5%)  G1 215.8  G2  67.6  binding L1
+  G1 cost x1.5                      OK          9492 $/h (+26.5%)  G1 215.8  G2  67.6  binding L1
+  G1 cost x3                        OK         15378 $/h (+104.9%)  G1 191.4  G2  92.0  binding -
+  G2 Pmax 92 -> 82.8 MW (90%)       OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  G2 Pmax 92 -> 69 MW (75%)         OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  G2 Pmax 92 -> 55.2 MW (60%)       R10      OPF infeasible
+  G2 Pmax 92 -> 46 MW (50%)         R10      OPF infeasible
+  G2 out of service                 CHECKER  R9_ADEQUACY
+  G2 cost x0.5                      OK          5739 $/h (-23.5%)  G1 215.8  G2  67.6  binding L1
+  G2 cost x1.5                      OK          9269 $/h (+23.5%)  G1 215.8  G2  67.6  binding L1
+  G2 cost x3                        OK         14564 $/h (+94.1%)  G1 215.8  G2  67.6  binding L1
+  G1 Pmin -> 50 MW (must-run)       OK          7504 $/h ( -0.0%)  G1 215.8  G2  67.6  binding L1
+  G2 Pmin -> 30 MW (must-run)       OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  G2 Pmin -> 80 MW (must-run)       OK          7922 $/h ( +5.6%)  G1 203.4  G2  80.0  binding -
+  G3 out (condenser, 0 MW)          OK          7504 $/h ( +0.0%)  G1 215.8  G2  67.6  binding L1
+  G1 Pmax 300 MW (above nameplate)  CHECKER  R4_NAMEPLATE
+
+4. LOADS (every bus with load): cost at +10% and +25%, and the largest feasible factor
+  bus 2     21.7 MW   +10%:  +1.5%   +25%:  +3.8%   max factor 2.12 (= 46.0 MW, +24.3 MW)
+  bus 3      2.4 MW   +10%:  +0.1%   +25%:  +0.3%   max factor 3.00 (= 7.2 MW, +4.8 MW)
+  bus 4      7.6 MW   +10%:  +0.4%   +25%:  +1.1%   max factor 3.00 (= 22.8 MW, +15.2 MW)
+  bus 5     94.2 MW   +10%:  +6.1%   +25%: +15.2%   max factor 1.29 (= 121.6 MW, +27.4 MW)
+  bus 7     22.8 MW   +10%:  +1.4%   +25%:  +3.5%   max factor 2.29 (= 52.3 MW, +29.5 MW)
+  bus 8     30.0 MW   +10%:  +1.8%   +25%:  +4.5%   max factor 2.04 (= 61.3 MW, +31.3 MW)
+  bus 10     5.8 MW   +10%:  +0.3%   +25%:  +0.9%   max factor 3.00 (= 17.4 MW, +11.6 MW)
+  bus 12    11.2 MW   +10%:  +0.6%   +25%:  +1.6%   max factor 3.00 (= 33.6 MW, +22.4 MW)
+  bus 14     6.2 MW   +10%:  +0.4%   +25%:  +0.9%   max factor 3.00 (= 18.6 MW, +12.4 MW)
+  bus 15     8.2 MW   +10%:  +0.5%   +25%:  +1.2%   max factor 3.00 (= 24.6 MW, +16.4 MW)
+  bus 16     3.5 MW   +10%:  +0.2%   +25%:  +0.5%   max factor 3.00 (= 10.5 MW, +7.0 MW)
+  bus 17     9.0 MW   +10%:  +0.5%   +25%:  +1.3%   max factor 3.00 (= 27.0 MW, +18.0 MW)
+  bus 18     3.2 MW   +10%:  +0.2%   +25%:  +0.5%   max factor 3.00 (= 9.6 MW, +6.4 MW)
+  bus 19     9.5 MW   +10%:  +0.6%   +25%:  +1.4%   max factor 3.00 (= 28.5 MW, +19.0 MW)
+  bus 20     2.2 MW   +10%:  +0.1%   +25%:  +0.3%   max factor 3.00 (= 6.6 MW, +4.4 MW)
+  bus 21    17.5 MW   +10%:  +1.0%   +25%:  +2.6%   max factor 2.47 (= 43.2 MW, +25.7 MW)
+  bus 23     3.2 MW   +10%:  +0.2%   +25%:  +0.5%   max factor 3.00 (= 9.6 MW, +6.4 MW)
+  bus 24     8.7 MW   +10%:  +0.5%   +25%:  +1.3%   max factor 3.00 (= 26.1 MW, +17.4 MW)
+  bus 26     3.5 MW   +10%:  +0.2%   +25%:  +0.5%   max factor 3.00 (= 10.5 MW, +7.0 MW)
+  bus 29     2.4 MW   +10%:  +0.1%   +25%:  +0.4%   max factor 3.00 (= 7.2 MW, +4.8 MW)
+  bus 30    10.6 MW   +10%:  +0.6%   +25%:  +1.6%   max factor 3.00 (= 31.8 MW, +21.2 MW)
+  system: load 283.4 MW, capacity 363.0 MW, headroom 79.6 MW
