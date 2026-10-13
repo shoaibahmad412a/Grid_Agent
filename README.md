@@ -302,12 +302,29 @@ Model `gpt-5-nano-2025-08-07`, reasoning effort `low`, 40 requests × 4 modes ×
 | M3 + checker | 95.8 ± 2.4% | 95.8 ± 2.4% | 96.1 ± 3.7% | 94.4 ± 7.9% | 3.9 ± 3.7% | 0.08 | 1,879 |
 | M4 full | 98.3 ± 1.2% | 98.3 ± 1.2% | 99.0 ± 1.4% | 94.4 ± 7.9% | 1.0 ± 1.4% | 0.08 | 1,891 |
 
+Success rate by request group (mean over the 3 repeats; `results/figures/b_group_mode_heatmap_api.csv`):
+
+| Group | M1 | M2 | M3 | M4 |
+|---|---|---|---|---|
+| outage (10) | 40% | 100% | 100% | 100% |
+| gen (10) | 47% | 97% | 93% | 100% |
+| load (8) | 12% | 100% | 100% | 100% |
+| combined (6) | 67% | 100% | 89% | 94% |
+| impossible (6) | 28% | 50% | 94% | 94% |
+
+![Feasibility and edit accuracy by mode](results/figures/a_feasibility_accuracy_api.png)
+
+![Success rate by request group and mode](results/figures/b_group_mode_heatmap_api.png)
+
 Facts from the runs (interpretation belongs in the researcher's note):
 - **M1:** the median cost gap is −0.04%, below the safe optimum, which is only possible by breaking a limit. In the first 10-request check, the infeasible M1 dispatches overloaded line L1. M1 refused 3 safe outage requests in that check, each time stating that a DC-OPF re-solve was needed.
 - **M2:** the failures are almost entirely the impossible requests R38–R40 (islanding, G2 trip, L1 trip). The model applied the edits and the solver returned *infeasible* every time (9 of 9).
 - **M3 and M4:** retries happened only on the impossible group. After the checker's R8, R9 or R10 message the model refused in 16 of 18 attempts on R38–R40.
 - **Latency:** about 2–5 s per decision. One M2 call took 549 s (R13, repeat 3, an API stall), which inflates M2's mean latency.
 - **Energy:** one DC-OPF solve is about 5×10⁻⁸ kWh and 28 ms. The energy of a remote API call cannot be measured.
+- **Groups:** M1 is weakest on load requests (12%). M3 loses a few points on gen and combined requests through false refusals, which M4 does not show to the same degree.
+
+All figures and the numbers behind them are in `results/figures/` (`c_energy_latency.png` compares the LLM's latency with the DC-OPF solve).
 
 ---
 
