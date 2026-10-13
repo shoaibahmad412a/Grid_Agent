@@ -2,7 +2,7 @@
 
 *Prepared for Dr Mieye Li · Shoaib Ahmad · October 2026*
 
-Full details: [technical report (Word)](report/Grid_LLM_Agent_Technical_Report.docx) · [PDF](report/Grid_LLM_Agent_Technical_Report.pdf)
+Full details: [technical report (Word)](results/Grid_LLM_Agent_Report.docx) · [PDF](results/Grid_LLM_Agent_Report.pdf)
 
 ## 1. What the project asks
 
@@ -164,7 +164,8 @@ Without a checker (M2), the model refused requests whose problem is **visible in
 | `results/raw/` | Every LLM call (prompt, reply, latency, tokens) |
 | `results/tables/`, `results/figures/` | Results tables and figures |
 | `results/failures.csv` | Every failed decision |
-| `report/` | Full technical report (Word and PDF) |
+| `results/Grid_LLM_Agent_Report.docx`, `.pdf` | Full technical report (Word and PDF) |
+| `report/` | Script and data that built the first version of the report |
 | `tests/` | 101 automated tests, all passing |
 
 ---
