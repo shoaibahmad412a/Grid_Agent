@@ -138,3 +138,21 @@ def test_run_all_drop_records(tmp_path):
     p.write_text("".join(_json.dumps({"id": i}) + "\n" for i in ("R16", "R17", "R18")), encoding="utf-8")
     assert drop_records(p, {"R17"}) == 1
     assert [_json.loads(l)["id"] for l in p.read_text(encoding="utf-8").splitlines()] == ["R16", "R18"]
+
+
+def test_rebuild_runs_replays_logged_replies(net, tmp_path):
+    """A run rebuilt from its raw log gives the same records as the original run."""
+    import json as _json
+    from rebuild_runs import rebuild
+    from src.agent import run_mode3
+    from src.llm import CallLogger, ScriptedLLM
+    req = {"id": "T1", "group": "outage", "text": "the line between bus 27 and bus 30 tripped"}
+    bad = '{"edits": [{"action": "set_line_status", "line": "L42", "status": "out"}], "refuse": false, "reason": ""}'
+    good = '{"edits": [{"action": "set_line_status", "line": "L38", "status": "out"}], "refuse": false, "reason": ""}'
+    raw = tmp_path / "raw"
+    original = run_mode3(req, net, ScriptedLLM([bad, good]), CallLogger("api_m3_r1", raw))
+    recs = rebuild(raw, tmp_path / "runs", [req])
+    assert len(recs) == 1
+    for k in ("outcome", "retries_used", "canonical_diff", "cost", "pg"):
+        assert recs[0][k] == original[k]
+    assert _json.loads((tmp_path / "runs" / "api_m3_r1.jsonl").read_text(encoding="utf-8"))["repeat"] == 1

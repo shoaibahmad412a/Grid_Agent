@@ -2,6 +2,5 @@
 .env
 __pycache__/
 *.pyc
-results/runs/
 .pytest_cache/
 emissions.csv
