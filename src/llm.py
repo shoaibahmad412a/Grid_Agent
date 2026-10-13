@@ -52,6 +52,7 @@ def missing_key_message() -> str:
         msg += " - the file exists but has no line 'LLM_API_KEY=...' (check the spelling, and that it is not commented out)."
     return msg
 
+
 SEED = 42
 TIMEOUT_S = 300
 MAX_RETRIES = 3
