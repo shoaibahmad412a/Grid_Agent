@@ -31,6 +31,6 @@ if __name__ == "__main__":
     print(to_markdown(t["by_mode"]))
     if not a.no_energy:
         e = measure_opf_energy(net)
-        (out / "opf_energy.json").write_text(json.dumps(e, indent=2))
+        (out / "opf_energy.json").write_text(json.dumps(e, indent=2), encoding="utf-8")
         print("DC-OPF solve:", e)
     print(f"tables saved in {out}")

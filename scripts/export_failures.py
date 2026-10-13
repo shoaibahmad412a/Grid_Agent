@@ -50,11 +50,11 @@ def main():
     ap.add_argument("--out", default=str(RESULTS / "failures.csv"))
     a = ap.parse_args()
     if os.path.exists(a.out):
-        with open(a.out) as f:
+        with open(a.out, encoding="utf-8-sig") as f:
             if any((r.get("my_label") or "").strip() for r in csv.DictReader(f)):
                 raise SystemExit(f"{a.out} already has labels in my_label; not overwriting it.")
     rows = failure_rows(load_runs(a.runs), read_jsonl(a.truth), read_jsonl(a.requests), load_case(str(CASE)))
-    with open(a.out, "w", newline="") as f:
+    with open(a.out, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         w.writerows(rows)

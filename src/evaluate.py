@@ -23,7 +23,7 @@ TARGET_COUNTS = {"outage": 10, "gen": 10, "load": 8, "combined": 6, "impossible"
 
 def read_jsonl(path) -> list[dict]:
     rows = []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for n, line in enumerate(f, start=1):
             line = line.strip()
             if line:
@@ -224,6 +224,6 @@ def write_tables(df: pd.DataFrame, out_dir="results/tables") -> dict:
     by_mode = aggregate(df, ["backend", "model", "mode"])
     by_group = aggregate(df, ["backend", "mode", "group"])
     for name, t in (("by_mode", by_mode), ("by_group", by_group)):
-        t.to_csv(out / f"{name}.csv", index=False)
-        (out / f"{name}.md").write_text(to_markdown(t))
+        t.to_csv(out / f"{name}.csv", index=False, encoding="utf-8")
+        (out / f"{name}.md").write_text(to_markdown(t), encoding="utf-8")
     return {"by_mode": by_mode, "by_group": by_group}

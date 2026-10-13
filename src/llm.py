@@ -245,7 +245,7 @@ class CallLogger:
         line = json.dumps(entry, default=str)
         for s in self._secrets:
             line = line.replace(s, "[REDACTED]")
-        with self.path.open("a") as f:
+        with self.path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
 
 

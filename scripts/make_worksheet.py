@@ -132,7 +132,7 @@ def main():
     net = load_case(str(CASE))
     results = verify(net)
     counts = {}
-    with open(OUT, "w", newline="") as f:
+    with open(OUT, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         for n, ((group, scen, style, edits, probe), res) in enumerate(zip(ROWS, results), start=1):

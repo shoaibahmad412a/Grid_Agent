@@ -334,6 +334,7 @@ All figures and the numbers behind them are in `results/figures/` (`c_energy_lat
 - **One small grid (30 buses), 40 requests, one model (gpt-5-nano).** This is a pilot, not a final answer.
 - **Energy is measured only for the local model.** The API's energy is not measurable from outside.
 - **gpt-5-nano does not allow temperature 0.** Its replies can vary, which the 3 repeats measure.
+- **R17 text encoding (fixed after the run).** On Windows the benchmark file was read with the cp1252 encoding, so R17's em dash reached the model as "expensiveâ€”triple" in all 12 R17 calls. The model still read "triple" correctly in 11 of 12. The code now reads and writes every file as UTF-8; re-running R17 removes the issue.
 - **The scenarios were tool-selected.** The wording is human. This should be stated in the note.
 
 ---

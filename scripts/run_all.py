@@ -106,7 +106,7 @@ def main():
                 continue
             rec = run_one(m, req, net, llm, logger, base)
             rec.update(repeat=rep, run_id=run_id)
-            with open(out_path, "a") as f:
+            with open(out_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(rec, default=str) + "\n")
             done_calls += 1
             el = time.time() - t_start

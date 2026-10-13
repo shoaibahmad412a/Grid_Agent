@@ -20,7 +20,7 @@ if __name__ == "__main__":
     a = ap.parse_args()
     net = load_case(str(CASE))
     rows = [ground_truth_solution(net, t) for t in read_jsonl(a.truth)]
-    with open(a.out, "w") as f:
+    with open(a.out, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
     for r in rows:

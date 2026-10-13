@@ -101,5 +101,5 @@ def build() -> str:
 if __name__ == "__main__":
     text = build()
     print(text)
-    (RESULTS / "scenario_table.txt").write_text(text)
+    (RESULTS / "scenario_table.txt").write_text(text, encoding="utf-8")
     print(f"saved {RESULTS / 'scenario_table.txt'}")

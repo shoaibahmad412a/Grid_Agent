@@ -5,6 +5,7 @@ and .csv, and one bar chart results/figures/failure_labels.png (+ CSV).
 Rows without a label are counted as UNLABELED.
 """
 import csv
+import io
 
 import _common  # noqa: F401
 from _common import RESULTS
@@ -23,8 +24,12 @@ INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 
 def main():
-    with open(RESULTS / "failures.csv") as f:
-        rows = list(csv.DictReader(f))
+    raw = (RESULTS / "failures.csv").read_bytes()
+    try:  # Excel on Windows may save the labelled file as cp1252 instead of UTF-8
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("cp1252")
+    rows = list(csv.DictReader(io.StringIO(text)))
     if not rows:
         raise SystemExit("failures.csv has no rows")
     df = pd.DataFrame(rows)
@@ -34,7 +39,7 @@ def main():
     table = table.loc[table.sum(axis=1).sort_values(ascending=False).index]
     (RESULTS / "tables").mkdir(parents=True, exist_ok=True)
     table.to_csv(RESULTS / "tables" / "failure_labels.csv")
-    (RESULTS / "tables" / "failure_labels.md").write_text(to_markdown(table.reset_index()))
+    (RESULTS / "tables" / "failure_labels.md").write_text(to_markdown(table.reset_index()), encoding="utf-8")
 
     series = list(table.columns)
     if len(series) > len(SLOTS):

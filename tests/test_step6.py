@@ -103,3 +103,29 @@ def test_show_run_table(net, tmp_path, monkeypatch, capsys):
     show_run.main()
     out = capsys.readouterr().out
     assert "2/2 fully correct" in out and "1/1 doable requests feasible" in out
+
+
+def test_utf8_benchmark_text_survives_reading(tmp_path):
+    """Request texts with non-ASCII characters (an em dash in R17) must be read as UTF-8 on every OS."""
+    from src.evaluate import read_jsonl
+    p = tmp_path / "r.jsonl"
+    p.write_bytes('{"id": "X", "text": "more expensive—triple"}\n'.encode("utf-8"))
+    assert read_jsonl(p)[0]["text"] == "more expensive—triple"
+
+
+def test_count_labels_reads_excel_cp1252(tmp_path, monkeypatch):
+    import count_labels
+    import export_failures as ef
+    (tmp_path / "tables").mkdir()
+    (tmp_path / "figures").mkdir()
+    row = {c: "" for c in ef.COLUMNS}
+    row.update(backend="api", mode="1", request_id="R01", request_text="café", my_label="UNSAFE_DISPATCH")
+    import csv as _csv, io as _io
+    buf = _io.StringIO()
+    w = _csv.DictWriter(buf, fieldnames=ef.COLUMNS)
+    w.writeheader()
+    w.writerow(row)
+    (tmp_path / "failures.csv").write_bytes(buf.getvalue().encode("cp1252"))
+    monkeypatch.setattr(count_labels, "RESULTS", tmp_path)
+    count_labels.main()
+    assert "UNSAFE_DISPATCH" in (tmp_path / "tables" / "failure_labels.md").read_text(encoding="utf-8")

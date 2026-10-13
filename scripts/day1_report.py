@@ -74,5 +74,5 @@ if __name__ == "__main__":
     text = build_report()
     print(text)
     (RESULTS).mkdir(exist_ok=True)
-    (RESULTS / "day1_report.txt").write_text(text)
+    (RESULTS / "day1_report.txt").write_text(text, encoding="utf-8")
     print(f"saved {RESULTS / 'day1_report.txt'}")
