@@ -113,6 +113,7 @@ def explain(base_net: Network, edited_net: Network | None, result: dict | None,
     changes = "; ".join(parts) if parts else "none"
     cost = result["cost"]
     pct = (cost - base_cost) / base_cost * 100 if base_cost else 0.0
+    pct = round(pct, 1) + 0.0  # + 0.0 turns -0.0 into 0.0, so tiny changes read "+0.0%" 
     loads = {l: v for l, v in result["loading_pct"].items() if v is not None}
     top = max(loads, key=loads.get) if loads else None
     text = f"Changes applied: {changes}. New cost: {cost:,.0f} $/h ({pct:+.1f}% vs base)."

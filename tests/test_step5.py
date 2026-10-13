@@ -103,3 +103,11 @@ def test_mentioned_rules(net):
 
 def test_explain_template(net):
     assert explain(net, None, None, None, refused=True, reason="unsafe.") == "Refused: unsafe."
+
+
+def test_explain_has_no_negative_zero(net):
+    es = parse_edits(E([{"action": "set_line_status", "line": "L41", "status": "out"}]))
+    edited = apply_edits(net, es)
+    base = solve_dcopf(net)["cost"]
+    text = explain(net, edited, solve_dcopf(edited), base)
+    assert "-0.0%" not in text and "(+0.0% vs base)" in text
