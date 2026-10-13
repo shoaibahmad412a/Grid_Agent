@@ -124,3 +124,47 @@ def test_anthropic_haiku_5_5_request_shape(monkeypatch):
     assert text == GOOD and meta["model"] == "claude-haiku-5-5" and meta["error"] is None
     body["stop_reason"] = "refusal"
     assert APILLM(model="claude-haiku-5-5", provider="anthropic").complete([{"role": "user", "content": "u"}])[1]["error"] == "stop_reason refusal"
+
+
+def test_gemini_request_shape(monkeypatch):
+    """Native Gemini call: system instruction, model role for assistant turns,
+    temperature 0 + seed, thinking level, thought parts skipped, thinking tokens counted."""
+    monkeypatch.setenv("LLM_API_KEY", "AIza-test-key-000000")
+    monkeypatch.setenv("LLM_API_EFFORT", "low")
+    sent = []
+    body = {"modelVersion": "gemini-3.1-flash-lite",
+            "candidates": [{"finishReason": "STOP", "content": {"role": "model", "parts": [
+                {"text": "hidden reasoning", "thought": True}, {"text": GOOD}]}}],
+            "usageMetadata": {"promptTokenCount": 1200, "candidatesTokenCount": 40, "thoughtsTokenCount": 60}}
+    monkeypatch.setattr(requests, "post",
+                        lambda url, headers, json, timeout: sent.append((url, headers, json)) or FakeResp(200, body))
+    api = APILLM(model="gemini-3.1-flash-lite", provider="gemini")
+    text, meta = api.complete([{"role": "system", "content": "s"}, {"role": "user", "content": "u"},
+                               {"role": "assistant", "content": "a"}, {"role": "user", "content": "fix it"}])
+    url, headers, payload = sent[0]
+    assert url == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+    assert headers == {"x-goog-api-key": "AIza-test-key-000000"} and "AIza" not in url
+    assert payload["systemInstruction"] == {"parts": [{"text": "s"}]}
+    assert [c["role"] for c in payload["contents"]] == ["user", "model", "user"]
+    assert payload["generationConfig"]["temperature"] == 0 and payload["generationConfig"]["seed"] == 42
+    assert payload["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+    assert text == GOOD and meta["tokens_in"] == 1200 and meta["tokens_out"] == 100 and meta["error"] is None
+    body["candidates"][0]["finishReason"] = "MAX_TOKENS"
+    assert api.complete([{"role": "user", "content": "u"}])[1]["error"] == "finishReason MAX_TOKENS"
+    body.pop("candidates")
+    body["promptFeedback"] = {"blockReason": "SAFETY"}
+    assert api.complete([{"role": "user", "content": "u"}])[1]["error"] == "blocked: SAFETY"
+
+
+def test_check_api_script(monkeypatch, capsys):
+    import runpy
+    monkeypatch.setenv("LLM_API_KEY", "AIza-test-key-000000")
+    monkeypatch.setenv("LLM_API_PROVIDER", "gemini")
+    monkeypatch.setenv("LLM_API_MODEL", "gemini-3.1-flash-lite")
+    reply = '{"edits": [], "refuse": true, "reason": "test"}'
+    body = {"modelVersion": "gemini-3.1-flash-lite", "usageMetadata": {"promptTokenCount": 20, "candidatesTokenCount": 9},
+            "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": reply}]}}]}
+    monkeypatch.setattr(requests, "post", lambda *a, **k: FakeResp(200, body))
+    runpy.run_path("scripts/check_api.py", run_name="__main__")
+    out = capsys.readouterr().out
+    assert "parses as edit JSON: yes" in out and "AIza" not in out

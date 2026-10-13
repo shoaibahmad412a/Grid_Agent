@@ -28,8 +28,9 @@ Versions are pinned in `requirements.txt`. They were installed and tested on Pyt
 
 | Key | Meaning |
 |---|---|
-| `LLM_API_KEY`, `LLM_API_MODEL` | Remote model; the exact model name is recorded in every result |
-| `LLM_API_PROVIDER` | `openai` (any OpenAI-compatible `/chat/completions` API: OpenAI, Groq, Together, OpenRouter, …) or `anthropic` |
+| `LLM_API_KEY`, `LLM_API_MODEL` | Remote model, for example `gemini-3.1-flash-lite`; the exact model name is recorded in every result |
+| `LLM_API_PROVIDER` | `gemini` (Google Gemini API), `anthropic`, or `openai` (any OpenAI-compatible `/chat/completions` API) |
+| `LLM_API_EFFORT` | Optional reasoning level. Gemini: `minimal`/`low`/`medium`/`high`. Anthropic: `low` to `max` |
 | `LLM_API_BASE` | Optional base URL; leave empty for the provider default |
 | `OLLAMA_MODEL`, `OLLAMA_URL` | Local model, for example `llama3.1:8b` and `http://localhost:11434` |
 | `CODECARBON_COUNTRY` | ISO-3 country code for CodeCarbon's carbon intensity (default `PAK`) |
@@ -59,7 +60,8 @@ pytest -s tests/test_step2.py                  # Step 2: prints one checker mess
 python scripts/validate_benchmark.py           # Step 3: checks data/requests.jsonl + data/ground_truth.jsonl
 python scripts/build_ground_truth.py           # Step 3: writes results/ground_truth_solutions.jsonl
 python scripts/run_all.py --mode 2 --backend mock --all              # Step 4: must be 100%
-python scripts/run_all.py --mode 2 --backend ollama --ids R01,R02    # Step 4: a real model on a few ids
+python scripts/check_api.py                    # one tiny test call to the API in .env
+python scripts/run_all.py --mode 2 --backend api --ids R01,R02       # Step 4: a real model on a few ids
 python scripts/run_all.py --modes all --backend mock --all           # Step 6: mock sanity runs
 python scripts/run_all.py --modes all --backend ollama --all --repeats 3
 python scripts/run_all.py --modes all --backend api --all --repeats 3
@@ -130,7 +132,8 @@ These are the defaults I chose where the plan left a choice open. Each is one li
 9. **Angle-difference limits** (±30° in the file) are not modelled. They are not in the plan's formulation. pandapower's DC-OPF gives the same base cost (7504.44 $/h).
 10. **Energy.** CodeCarbon measures at machine level, so each Ollama call is one tracker. A single DC-OPF solve (about 15 ms) is below CodeCarbon's resolution, so it is measured as 200 solves divided by 200. API calls get `None` with the reason "remote; not measurable".
 11. **Temperature on newer Claude models.** Claude Haiku 5.5 (and other current Claude models) reject a temperature value with HTTP 400. Temperature 0 is therefore sent only to models that accept it (`accepts_temperature` in `src/llm.py`), and the 3 repeats measure how much the replies vary. Haiku 5.5 also thinks before answering (adaptive thinking, default effort `medium`; set `LLM_API_EFFORT` to pin it). Thinking tokens are billed as output.
-12. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
+12. **Gemini settings.** The `gemini` provider calls Google's native `generateContent` API with temperature 0, seed 42 and `maxOutputTokens` 16000. `LLM_API_EFFORT` sets `thinkingLevel`. Thinking tokens are billed as output, so they are counted in `tokens_out`. Google advises keeping Gemini 3 models at their default temperature (1.0); temperature 0 follows this project's reproducibility rule and can be revisited if replies degrade.
+13. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
 
 ## Repository layout
 
