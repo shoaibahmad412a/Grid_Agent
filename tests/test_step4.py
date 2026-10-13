@@ -168,3 +168,33 @@ def test_check_api_script(monkeypatch, capsys):
     runpy.run_path("scripts/check_api.py", run_name="__main__")
     out = capsys.readouterr().out
     assert "parses as edit JSON: yes" in out and "AIza" not in out
+
+
+def test_openai_reasoning_model_gets_no_temperature(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
+    monkeypatch.setenv("LLM_API_EFFORT", "low")
+    monkeypatch.delenv("LLM_API_TEMPERATURE", raising=False)
+    sent = []
+    ok = {"model": "gpt-5-nano", "choices": [{"message": {"content": GOOD}}], "usage": {"prompt_tokens": 5, "completion_tokens": 6}}
+    monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: sent.append(json) or FakeResp(200, ok))
+    APILLM(model="gpt-5-nano", provider="openai").complete([{"role": "user", "content": "u"}])
+    assert "temperature" not in sent[0] and "seed" not in sent[0] and sent[0]["reasoning_effort"] == "low"
+    monkeypatch.setenv("LLM_API_TEMPERATURE", "0")
+    APILLM(model="gpt-5-nano", provider="openai").complete([{"role": "user", "content": "u"}])
+    assert sent[1]["temperature"] == 0 and sent[1]["seed"] == 42
+
+
+def test_list_models(monkeypatch):
+    from src.llm import list_models
+    monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
+    seen = {}
+
+    class R:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"data": [{"id": "gpt-b"}, {"id": "gpt-a"}]}
+    monkeypatch.setattr(requests, "get", lambda url, headers, timeout: seen.update(url=url, h=headers) or R())
+    assert list_models("openai") == ["gpt-a", "gpt-b"]
+    assert seen["url"] == "https://api.openai.com/v1/models" and seen["h"]["Authorization"].startswith("Bearer ")

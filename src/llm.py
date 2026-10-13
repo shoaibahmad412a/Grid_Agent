@@ -29,9 +29,27 @@ ANTHROPIC_MAX_TOKENS = 16000  # thinking tokens count toward this limit
 GEMINI_MAX_TOKENS = 16000     # Gemini thinking tokens also count toward maxOutputTokens
 
 
+# OpenAI reasoning models accept only the default temperature (a value of 0 is a 400).
+OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5", "gpt-6")
+
+
 def accepts_temperature(model: str) -> bool:
     """False for Claude models where a temperature value returns HTTP 400."""
     return not model.startswith(NO_SAMPLING_PREFIXES)
+
+
+def openai_sampling(model: str) -> bool:
+    """Send temperature 0 + seed to this OpenAI-compatible model?
+
+    LLM_API_TEMPERATURE overrides: '0' always sends them, 'off' never does.
+    Otherwise they are skipped for OpenAI reasoning models (o-series, gpt-5+).
+    """
+    force = (os.getenv("LLM_API_TEMPERATURE") or "").strip().lower()
+    if force in ("0", "on"):
+        return True
+    if force == "off":
+        return False
+    return not model.startswith(OPENAI_REASONING_PREFIXES)
 
 
 def _meta(model, latency=0.0, tin=None, tout=None, error=None, kwh=None, note=None) -> dict:
@@ -140,6 +158,7 @@ class APILLM(LLM):
             raise ValueError(f"LLM_API_PROVIDER must be one of {sorted(self.DEFAULT_BASE)}")
         self.base = (base or os.getenv("LLM_API_BASE") or self.DEFAULT_BASE[self.provider]).rstrip("/")
         # Reasoning effort. Anthropic: low|medium|high|xhigh|max. Gemini: minimal|low|medium|high.
+        # OpenAI reasoning models: minimal|low|medium|high (sent as reasoning_effort).
         self.effort = os.getenv("LLM_API_EFFORT") or None
         if not self._key or not self.model:
             raise ValueError("LLM_API_KEY and LLM_API_MODEL must be set in .env")
@@ -211,7 +230,11 @@ class APILLM(LLM):
         return (*_post_with_retry(url, headers, payload), parse)
 
     def _openai(self, messages):
-        payload = {"model": self.model, "messages": messages, "temperature": 0, "seed": SEED}
+        payload = {"model": self.model, "messages": messages}
+        if openai_sampling(self.model):
+            payload.update(temperature=0, seed=SEED)
+        if self.effort:
+            payload["reasoning_effort"] = self.effort
         headers = {"Authorization": f"Bearer {self._key}"}
 
         def parse(d):
@@ -253,3 +276,26 @@ class CallLogger:
             line = line.replace(s, "[REDACTED]")
         with self.path.open("a") as f:
             f.write(line + "\n")
+
+
+def list_models(provider: str | None = None) -> list[str]:
+    """Model ids this account can use, asked from the provider with the key in .env."""
+    api = APILLM.__new__(APILLM)
+    load_dotenv()
+    api._key = os.getenv("LLM_API_KEY") or ""
+    api.provider = (provider or os.getenv("LLM_API_PROVIDER") or "openai").lower()
+    base = (os.getenv("LLM_API_BASE") or APILLM.DEFAULT_BASE[api.provider]).rstrip("/")
+    if not api._key:
+        raise ValueError("LLM_API_KEY must be set in .env")
+    if api.provider == "anthropic":
+        url, headers = f"{base}/v1/models?limit=100", {"x-api-key": api._key, "anthropic-version": "2023-06-01"}
+    elif api.provider == "gemini":
+        url, headers = f"{base}/models?pageSize=1000", {"x-goog-api-key": api._key}
+    else:
+        url, headers = f"{base}/models", {"Authorization": f"Bearer {api._key}"}
+    r = requests.get(url, headers=headers, timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(f"HTTP {r.status_code}: {api._scrub(r.text[:300])}")
+    d = r.json()
+    items = d.get("data") or d.get("models") or []
+    return sorted((m.get("id") or m.get("name", "")).removeprefix("models/") for m in items)
