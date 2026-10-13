@@ -129,3 +129,12 @@ def test_count_labels_reads_excel_cp1252(tmp_path, monkeypatch):
     monkeypatch.setattr(count_labels, "RESULTS", tmp_path)
     count_labels.main()
     assert "UNSAFE_DISPATCH" in (tmp_path / "tables" / "failure_labels.md").read_text(encoding="utf-8")
+
+
+def test_run_all_drop_records(tmp_path):
+    import json as _json
+    from run_all import drop_records
+    p = tmp_path / "api_m2_r1.jsonl"
+    p.write_text("".join(_json.dumps({"id": i}) + "\n" for i in ("R16", "R17", "R18")), encoding="utf-8")
+    assert drop_records(p, {"R17"}) == 1
+    assert [_json.loads(l)["id"] for l in p.read_text(encoding="utf-8").splitlines()] == ["R16", "R18"]

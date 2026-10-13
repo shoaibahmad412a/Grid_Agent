@@ -4,6 +4,7 @@ Usage examples:
   python scripts/run_all.py --mode 2 --backend mock --all
   python scripts/run_all.py --mode all --backend ollama --ids R01,R02
   python scripts/run_all.py --modes all --backend api --all --repeats 3
+  python scripts/run_all.py --modes all --backend api --ids R17 --repeats 3 --redo
 
 Output: results/runs/<backend>_m<k>_r<n>.jsonl (records) and
 results/raw/<backend>_m<k>_r<n>.jsonl (every LLM call). Resume-safe: ids
@@ -45,6 +46,16 @@ def run_one(mode, req, net, llm, logger, base):
     return RUNNERS[mode](req, net, llm, logger)
 
 
+def drop_records(path, ids) -> int:
+    """Remove the records with these ids from a run file; return how many were removed."""
+    rows = read_jsonl(path)
+    keep = [r for r in rows if r["id"] not in ids]
+    with open(path, "w", encoding="utf-8") as f:
+        for r in keep:
+            f.write(json.dumps(r, default=str) + "\n")
+    return len(rows) - len(keep)
+
+
 def mock_sanity(net, base, requests, truth, modes=(2, 3, 4)) -> dict:
     """Run the mock backend in memory; return success % per mode."""
     by_id = {t["id"]: t for t in truth}
@@ -67,6 +78,9 @@ def main():
     ap.add_argument("--requests", default=str(REQUESTS))
     ap.add_argument("--truth", default=str(TRUTH))
     ap.add_argument("--out-dir", default=str(RESULTS))
+    ap.add_argument("--redo", action="store_true",
+                    help="delete the selected ids from existing run files first, so they run again "
+                         "(old calls stay in results/raw)")
     a = ap.parse_args()
     if not a.all and not a.ids:
         ap.error("give --ids or --all")
@@ -97,6 +111,8 @@ def main():
         run_id = f"{a.backend}_m{m}_r{rep}"
         out_path = f"{runs_dir}/{run_id}.jsonl"
         os.makedirs(runs_dir, exist_ok=True)
+        if a.redo and os.path.exists(out_path):
+            drop_records(out_path, {r["id"] for r in requests})
         done = {r["id"] for r in read_jsonl(out_path)} if os.path.exists(out_path) else set()
         llm = make_llm(a.backend, mock_answers(net, truth, m) if a.backend == "mock" else None)
         logger = CallLogger(run_id, raw_dir)
