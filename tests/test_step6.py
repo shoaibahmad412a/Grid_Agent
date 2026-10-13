@@ -82,3 +82,24 @@ def test_energy_measure_returns_value_or_reason():
     result, kwh, note = energy.measure(lambda: 41 + 1)
     assert result == 42
     assert (kwh is None and note) or kwh >= 0
+
+
+def test_show_run_table(net, tmp_path, monkeypatch, capsys):
+    import json as _json
+    import show_run
+    from src.evaluate import mock_answers, read_jsonl
+    from src.agent import run_mode2
+    from src.llm import MockLLM
+    from conftest import EX_GT, EX_REQ
+    truth = read_jsonl(EX_GT)
+    llm = MockLLM(mock_answers(net, truth, 2))
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    with open(runs / "x.jsonl", "w") as f:
+        for r in read_jsonl(EX_REQ):
+            f.write(_json.dumps(run_mode2(r, net, llm)) + "\n")
+    monkeypatch.setattr(show_run, "RESULTS", tmp_path)
+    monkeypatch.setattr("sys.argv", ["x", "x", "--truth", str(EX_GT)])
+    show_run.main()
+    out = capsys.readouterr().out
+    assert "2/2 fully correct" in out and "1/1 doable requests feasible" in out
