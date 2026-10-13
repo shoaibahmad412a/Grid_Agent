@@ -129,7 +129,8 @@ These are the defaults I chose where the plan left a choice open. Each is one li
 8. **Islanding** (R8) is any bus not connected to the reference bus. This includes buses 11 and 13, which have only a condenser and no load.
 9. **Angle-difference limits** (±30° in the file) are not modelled. They are not in the plan's formulation. pandapower's DC-OPF gives the same base cost (7504.44 $/h).
 10. **Energy.** CodeCarbon measures at machine level, so each Ollama call is one tracker. A single DC-OPF solve (about 15 ms) is below CodeCarbon's resolution, so it is measured as 200 solves divided by 200. API calls get `None` with the reason "remote; not measurable".
-11. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
+11. **Temperature on newer Claude models.** Claude Haiku 5.5 (and other current Claude models) reject a temperature value with HTTP 400. Temperature 0 is therefore sent only to models that accept it (`accepts_temperature` in `src/llm.py`), and the 3 repeats measure how much the replies vary. Haiku 5.5 also thinks before answering (adaptive thinking, default effort `medium`; set `LLM_API_EFFORT` to pin it). Thinking tokens are billed as output.
+12. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
 
 ## Repository layout
 

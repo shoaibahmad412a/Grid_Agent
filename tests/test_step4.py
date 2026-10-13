@@ -88,7 +88,7 @@ def test_api_backend_and_retry_only_on_rate_limit(monkeypatch, provider):
 
     def fake_post(url, headers, json, timeout):
         calls.append(json)
-        assert json["temperature"] == 0
+        assert json["temperature"] == 0  # model "m" accepts sampling parameters
         return FakeResp(429, {}) if len(calls) == 1 else FakeResp(200, ok)
     monkeypatch.setattr(requests, "post", fake_post)
     api = APILLM(model="m", provider=provider)
@@ -105,3 +105,22 @@ def test_api_never_retries_on_content(monkeypatch):
         200, {"choices": [{"message": {"content": "garbage"}}], "usage": {}}))
     text, _ = APILLM(model="m", provider="openai").complete([{"role": "user", "content": "u"}])
     assert text == "garbage" and len(calls) == 1
+
+
+def test_anthropic_haiku_5_5_request_shape(monkeypatch):
+    """Claude Haiku 5.5 rejects temperature, so it must not be sent; refusals are errors."""
+    monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
+    monkeypatch.setenv("LLM_API_EFFORT", "low")
+    sent = []
+    body = {"model": "claude-haiku-5-5", "stop_reason": "end_turn", "usage": {"input_tokens": 9, "output_tokens": 3},
+            "content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": GOOD}]}
+    monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: sent.append((url, headers, json)) or FakeResp(200, body))
+    text, meta = APILLM(model="claude-haiku-5-5", provider="anthropic").complete(
+        [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}])
+    url, headers, payload = sent[0]
+    assert url == "https://api.anthropic.com/v1/messages" and headers["x-api-key"] == "sk-test-key-000000"
+    assert "temperature" not in payload and payload["output_config"] == {"effort": "low"}
+    assert payload["system"] == "s" and payload["messages"] == [{"role": "user", "content": "u"}]
+    assert text == GOOD and meta["model"] == "claude-haiku-5-5" and meta["error"] is None
+    body["stop_reason"] = "refusal"
+    assert APILLM(model="claude-haiku-5-5", provider="anthropic").complete([{"role": "user", "content": "u"}])[1]["error"] == "stop_reason refusal"

@@ -21,6 +21,16 @@ SEED = 42
 TIMEOUT_S = 300
 MAX_RETRIES = 3
 RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504, 529}
+# Claude models that reject sampling parameters (a non-default temperature is a 400).
+# On these, temperature cannot be set to 0; repeats measure the run-to-run spread.
+NO_SAMPLING_PREFIXES = ("claude-haiku-5", "claude-sonnet-5", "claude-opus-5", "claude-opus-4-7",
+                        "claude-opus-4-8", "claude-fable", "claude-mythos")
+ANTHROPIC_MAX_TOKENS = 16000  # thinking tokens count toward this limit
+
+
+def accepts_temperature(model: str) -> bool:
+    """False for Claude models where a temperature value returns HTTP 400."""
+    return not model.startswith(NO_SAMPLING_PREFIXES)
 
 
 def _meta(model, latency=0.0, tin=None, tout=None, error=None, kwh=None, note=None) -> dict:
@@ -122,6 +132,7 @@ class APILLM(LLM):
         self.provider = (provider or os.getenv("LLM_API_PROVIDER") or "openai").lower()
         default = "https://api.anthropic.com" if self.provider == "anthropic" else "https://api.openai.com/v1"
         self.base = (base or os.getenv("LLM_API_BASE") or default).rstrip("/")
+        self.effort = os.getenv("LLM_API_EFFORT") or None  # Anthropic only: low|medium|high|xhigh|max
         if not self._key or not self.model:
             raise ValueError("LLM_API_KEY and LLM_API_MODEL must be set in .env")
 
@@ -134,8 +145,12 @@ class APILLM(LLM):
             if self.provider == "anthropic":
                 system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
                 chat = [m for m in messages if m["role"] != "system"]
-                payload = {"model": self.model, "max_tokens": 1024, "temperature": 0,
+                payload = {"model": self.model, "max_tokens": ANTHROPIC_MAX_TOKENS,
                            "system": system, "messages": chat}
+                if accepts_temperature(self.model):
+                    payload["temperature"] = 0
+                if self.effort:
+                    payload["output_config"] = {"effort": self.effort}
                 headers = {"x-api-key": self._key, "anthropic-version": "2023-06-01"}
                 r, err = _post_with_retry(f"{self.base}/v1/messages", headers, payload)
             else:
@@ -153,6 +168,9 @@ class APILLM(LLM):
                 text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
                 u = d.get("usage", {})
                 tin, tout = u.get("input_tokens"), u.get("output_tokens")
+                if d.get("stop_reason") in ("refusal", "max_tokens"):
+                    return text, _meta(d.get("model", self.model), dt, tin, tout,
+                                       error=f"stop_reason {d['stop_reason']}", note=energy.REMOTE_NOTE)
             else:
                 text = d["choices"][0]["message"].get("content") or ""
                 u = d.get("usage", {})
