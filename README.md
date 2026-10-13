@@ -199,7 +199,7 @@ GRADING (the only place the correct answers are used):
 | **False refusals** | Did it refuse something that was doable? (Stops "refuse everything" from looking safe.) |
 | **Retries used** | How often the checker's feedback was needed and helped |
 | **Latency, tokens** | Speed and size of each decision |
-| **Energy (kWh)** | For the local model only (CodeCarbon), compared with the energy of one DC-OPF solve (about 3e-8 kWh) |
+| **Energy (kWh)** | For the local model only (CodeCarbon), compared with the energy of one DC-OPF solve (measured: about 5×10⁻⁸ kWh, 28 ms) |
 
 Every run is repeated **3 times**. Results are reported as mean ± spread.
 
@@ -215,7 +215,7 @@ Every run is repeated **3 times**. Results are reported as mean ± spread.
 | LLM connectors: mock, Ollama, OpenAI API (gpt-5-nano) | The 2-page note |
 | Validator, scenario table, worksheet tools | The emails to Dr. Li |
 | Grading, tables, figures, energy measurement | Running the experiments on the laptop |
-| 88 automated tests, all passing | Checking and committing each step |
+| 96 automated tests, all passing | Checking and committing each step |
 
 ---
 
@@ -235,10 +235,11 @@ src/       network.py    load the grid, IDs, network card for the LLM
            agent.py      the four modes and the prompts
            evaluate.py   grading and tables
            energy.py     CodeCarbon energy measurement
-scripts/   day1_report.py, scenario_table.py, validate_benchmark.py,
-           run_all.py, evaluate_runs.py, export_failures.py,
-           make_figures.py, count_labels.py
-tests/     88 tests, one file per step
+scripts/   day1_report.py, scenario_table.py, make_worksheet.py,
+           worksheet_to_benchmark.py, validate_benchmark.py, build_ground_truth.py,
+           list_models.py, check_api.py, run_all.py, show_run.py,
+           evaluate_runs.py, export_failures.py, make_figures.py, count_labels.py
+tests/     96 tests, one file per step
 results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 ```
 
@@ -247,9 +248,31 @@ results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 ## 13. Running it and what it costs
 
 - **Where it runs:** on your own laptop, with plain Python. No special app is needed.
-- **The LLM (the "brain"):** OpenAI **gpt-5-nano**, at about $0.05 / $0.40 per million input / output tokens (check OpenAI's pricing page). The full study is about 620 calls and about 2M tokens, an **estimated ~$0.40**. The account limits (2M tokens/min, 5,000 requests/min, 20M tokens/day) are far above what the study needs. A local model through Ollama remains an option (free, energy measurable, slower).
+- **The LLM (the "brain"):** OpenAI **gpt-5-nano** (version `gpt-5-nano-2025-08-07`), at about $0.05 / $0.40 per million input / output tokens (check OpenAI's pricing page). The full study used about 480 calls of about 1,700–1,900 tokens each, under $1 in total. The account limits (2M tokens/min, 5,000 requests/min, 20M tokens/day) are far above what the study needs. A local model through Ollama remains an option (free, energy measurable, slower).
 - **The API key** goes only in the `.env` file on your laptop. It is never pasted into chat and never committed to GitHub.
 - **Order of runs:** mock (must be 100%), then 10 requests on the real model (check the cost), then the full run: 40 requests × 4 modes × 3 repeats.
+
+### Reproduce every result from a fresh clone
+
+```bash
+git clone -b claude/grid-llm-agent-kickoff-81t4xl https://github.com/shoaibahmad412a/Grid_Agent.git
+cd Grid_Agent
+python -m venv .venv
+.venv\Scripts\activate            # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt
+copy .env.example .env             # Linux/macOS: cp .env.example .env ; then put your key in .env
+pytest                             # all tests must pass
+python scripts/day1_report.py
+python scripts/validate_benchmark.py          # 40 items, 10/10/8/6/6, 0 flags
+python scripts/check_api.py                   # one test call
+python scripts/run_all.py --modes all --backend mock --all     # must be 100%
+python scripts/run_all.py --modes all --backend api --all --repeats 3
+python scripts/evaluate_runs.py               # tables in results/tables/
+python scripts/export_failures.py             # results/failures.csv (label my_label by hand)
+python scripts/make_figures.py                # results/figures/
+python scripts/count_labels.py                # after labelling
+python scripts/show_run.py api_m2_r1          # graded table for any single run
+```
 
 ---
 
@@ -261,24 +284,44 @@ results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 | 1. Grid model + DC-OPF (verified by 3 solvers + pandapower) | ✅ done |
 | 2. Edit language + 10-rule checker | ✅ done |
 | 3. Benchmark (40 requests, 0 validator flags, mock 100% in all modes) | ✅ done |
-| 4. Real LLM (gpt-5-nano), Mode 2 on 10 requests | ⏳ next: run on the laptop with the OpenAI key |
-| 5. Modes 1, 3, 4 on 10 requests | ⏳ |
-| 6. Full run, tables, figures (then prompts and code are frozen) | ⏳ |
-| 7. Failure labels, 2-page note, email | ⏳ |
+| 4. Real LLM (gpt-5-nano), Mode 2 on 10 requests (10/10 correct) | ✅ done |
+| 5. Modes 1, 3, 4 on 10 requests | ✅ done |
+| 6. Full run (40 requests × 4 modes × 3 repeats) and tables; prompts and code now frozen | ✅ done; figures: `python scripts/make_figures.py` |
+| 7. Failure labels, 2-page note, email | ⏳ next |
 
 ---
 
-## 15. Honest limitations
+## 15. Results (pilot run, 14 Oct 2026)
+
+Model `gpt-5-nano-2025-08-07`, reasoning effort `low`, 40 requests × 4 modes × 3 repeats. Values are mean ± spread over the 3 repeats. Full tables: `results/tables/by_mode.md` and `by_group.md`.
+
+| Mode | Fully correct | Edit accuracy | Feasible on true grid (doable requests) | Refusal accuracy (6 impossible) | False refusals (doable) | Mean retries | Tokens / decision |
+|---|---|---|---|---|---|---|---|
+| M1 direct | 38.3 ± 4.3% | n/a | 40.2 ± 5.6% | 27.8 ± 7.9% | 2.9 ± 4.2% | 0 | 1,665 |
+| M2 edits | 91.7 ± 1.2% | 91.7 ± 1.2% | 99.0 ± 1.4% | 50.0% | 1.0 ± 1.4% | 0 | 1,703 |
+| M3 + checker | 95.8 ± 2.4% | 95.8 ± 2.4% | 96.1 ± 3.7% | 94.4 ± 7.9% | 3.9 ± 3.7% | 0.08 | 1,879 |
+| M4 full | 98.3 ± 1.2% | 98.3 ± 1.2% | 99.0 ± 1.4% | 94.4 ± 7.9% | 1.0 ± 1.4% | 0.08 | 1,891 |
+
+Facts from the runs (interpretation belongs in the researcher's note):
+- **M1:** the median cost gap is −0.04%, below the safe optimum, which is only possible by breaking a limit. In the first 10-request check, the infeasible M1 dispatches overloaded line L1. M1 refused 3 safe outage requests in that check, each time stating that a DC-OPF re-solve was needed.
+- **M2:** the failures are almost entirely the impossible requests R38–R40 (islanding, G2 trip, L1 trip). The model applied the edits and the solver returned *infeasible* every time (9 of 9).
+- **M3 and M4:** retries happened only on the impossible group. After the checker's R8, R9 or R10 message the model refused in 16 of 18 attempts on R38–R40.
+- **Latency:** about 2–5 s per decision. One M2 call took 549 s (R13, repeat 3, an API stall), which inflates M2's mean latency.
+- **Energy:** one DC-OPF solve is about 5×10⁻⁸ kWh and 28 ms. The energy of a remote API call cannot be measured.
+
+---
+
+## 16. Honest limitations
 
 - **DC model only:** no voltages, no reactive power, no losses. An AC check is a possible extension.
-- **One small grid (30 buses), 40 requests, 1–2 models.** This is a pilot, not a final answer.
+- **One small grid (30 buses), 40 requests, one model (gpt-5-nano).** This is a pilot, not a final answer.
 - **Energy is measured only for the local model.** The API's energy is not measurable from outside.
 - **gpt-5-nano does not allow temperature 0.** Its replies can vary, which the 3 repeats measure.
 - **The scenarios were tool-selected.** The wording is human. This should be stated in the note.
 
 ---
 
-## 16. Why this matters (link to future work)
+## 17. Why this matters (link to future work)
 
-- If the full agent (M4) is clearly safer than the raw LLM (M1), the lesson is simple: **let the AI handle the language and keep the physics in trusted tools.**
+- In this pilot the full agent (M4, 98% fully correct) is far safer than the raw LLM (M1, 38%). The lesson is simple: **let the AI handle the language and keep the physics in trusted tools.**
 - A natural next step is to replace the solver with a fast learned solver that still guarantees feasibility (for example, LOOP-LC-style methods), so the safe agent can answer in milliseconds.
