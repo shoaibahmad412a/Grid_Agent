@@ -13,9 +13,44 @@ import time
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
+from dotenv import load_dotenv as _dotenv_load
 
 from src import energy
+
+ROOT = Path(__file__).resolve().parents[1]
+ENV_FILE = ROOT / ".env"
+
+
+def load_dotenv() -> None:
+    """Load ROOT/.env, whatever the current folder is.
+
+    Also reads files that Windows tools saved as UTF-16 or with a UTF-8 BOM.
+    Values already set in the environment are not overwritten.
+    """
+    if ENV_FILE.is_file():
+        raw = ENV_FILE.read_bytes()
+        if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+            enc = "utf-16"
+        elif raw.startswith(b"\xef\xbb\xbf"):
+            enc = "utf-8-sig"
+        else:
+            enc = "utf-8"
+        _dotenv_load(ENV_FILE, encoding=enc)
+    else:
+        _dotenv_load()  # fall back to python-dotenv's own search
+
+
+def missing_key_message() -> str:
+    """Explain why LLM_API_KEY was not found (never prints any key)."""
+    msg = f"LLM_API_KEY is not set. Expected it in {ENV_FILE}"
+    if not ENV_FILE.is_file():
+        near = sorted(p.name for p in ROOT.glob(".env*") if p.name != ".env.example")
+        msg += " - that file does not exist."
+        if near:
+            msg += f" Found {near} instead: rename it to exactly '.env' (Windows may hide a '.txt' ending)."
+    else:
+        msg += " - the file exists but has no line 'LLM_API_KEY=...' (check the spelling, and that it is not commented out)."
+    return msg
 
 SEED = 42
 TIMEOUT_S = 300
@@ -145,7 +180,7 @@ class APILLM(LLM):
         self.base = (base or os.getenv("LLM_API_BASE") or self.DEFAULT_BASE).rstrip("/")
         self.effort = os.getenv("LLM_API_EFFORT") or None
         if not self._key:
-            raise ValueError("LLM_API_KEY must be set in .env")
+            raise ValueError(missing_key_message())
 
     def __repr__(self):  # never show the key
         return f"APILLM(model={self.model!r})"
@@ -218,7 +253,7 @@ def list_models() -> list[str]:
     load_dotenv()
     key = os.getenv("LLM_API_KEY") or ""
     if not key:
-        raise ValueError("LLM_API_KEY must be set in .env")
+        raise ValueError(missing_key_message())
     base = (os.getenv("LLM_API_BASE") or APILLM.DEFAULT_BASE).rstrip("/")
     r = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=60)
     if r.status_code != 200:

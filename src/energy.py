@@ -12,13 +12,12 @@ import logging
 import os
 import time
 
-from dotenv import load_dotenv
-
 REMOTE_NOTE = "remote; not measurable"
 
 
 def _tracker():
     from codecarbon import OfflineEmissionsTracker
+    from src.llm import load_dotenv
     load_dotenv()
     logging.getLogger("codecarbon").setLevel(logging.ERROR)
     return OfflineEmissionsTracker(

@@ -156,3 +156,23 @@ def test_list_models(monkeypatch):
     monkeypatch.setattr(requests, "get", lambda url, headers, timeout: seen.update(url=url, h=headers) or R())
     assert list_models() == ["gpt-a", "gpt-b"]
     assert seen["url"] == "https://api.openai.com/v1/models" and seen["h"]["Authorization"].startswith("Bearer ")
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16"])
+def test_env_file_read_in_any_windows_encoding(tmp_path, monkeypatch, encoding):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("LLM_API_KEY='sk-test-key-000000'\nLLM_API_MODEL=gpt-5-nano\n", encoding=encoding)
+    monkeypatch.setattr(llm_mod, "ENV_FILE", env)
+    llm_mod.load_dotenv()
+    import os
+    assert os.environ["LLM_API_KEY"] == "sk-test-key-000000"
+
+
+def test_missing_key_message_points_at_env_txt(tmp_path, monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    (tmp_path / ".env.txt").write_text("LLM_API_KEY=x\n")
+    monkeypatch.setattr(llm_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(llm_mod, "ENV_FILE", tmp_path / ".env")
+    with pytest.raises(ValueError, match=r"\.env\.txt.*rename it"):
+        APILLM()
