@@ -1,4 +1,4 @@
-"""Send ONE tiny request to the configured API backend and print what came back.
+"""Send ONE tiny request to the OpenAI API and print what came back.
 
 Use it after filling in .env, before any benchmark run. It costs a fraction
 of a cent. It prints the model, latency, token counts and the reply, and never
@@ -12,7 +12,7 @@ from src.llm import APILLM
 
 if __name__ == "__main__":
     api = APILLM()
-    print(f"provider: {api.provider}   model: {api.model}   effort: {api.effort or 'model default'}")
+    print(f"model: {api.model}   effort: {api.effort or 'model default'}")
     text, meta = api.complete([
         {"role": "system", "content": 'Reply with exactly this JSON and nothing else: {"edits": [], "refuse": true, "reason": "test"}'},
         {"role": "user", "content": "connection test"},

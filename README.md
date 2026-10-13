@@ -28,10 +28,11 @@ Versions are pinned in `requirements.txt`. They were installed and tested on Pyt
 
 | Key | Meaning |
 |---|---|
-| `LLM_API_KEY`, `LLM_API_MODEL` | Remote model, for example `gemini-3.1-flash-lite`; the exact model name is recorded in every result |
-| `LLM_API_PROVIDER` | `gemini` (Google Gemini API), `anthropic`, or `openai` (any OpenAI-compatible `/chat/completions` API) |
-| `LLM_API_EFFORT` | Optional reasoning level. Gemini: `minimal`/`low`/`medium`/`high`. Anthropic: `low` to `max` |
-| `LLM_API_BASE` | Optional base URL; leave empty for the provider default |
+| `LLM_API_KEY` | OpenAI API key |
+| `LLM_API_MODEL` | OpenAI model id, default `gpt-5-nano`; the exact model version is recorded in every result |
+| `LLM_API_EFFORT` | Reasoning effort for gpt-5-nano: `minimal`/`low`/`medium`/`high` (set `low`; keep it fixed for all runs) |
+| `LLM_API_TEMPERATURE` | Empty = auto (see choice 11 below); `0` = always send temperature 0 + seed; `off` = never |
+| `LLM_API_BASE` | Optional; leave empty for `https://api.openai.com/v1` |
 | `OLLAMA_MODEL`, `OLLAMA_URL` | Local model, for example `llama3.1:8b` and `http://localhost:11434` |
 | `CODECARBON_COUNTRY` | ISO-3 country code for CodeCarbon's carbon intensity (default `PAK`) |
 
@@ -132,10 +133,9 @@ These are the defaults I chose where the plan left a choice open. Each is one li
 8. **Islanding** (R8) is any bus not connected to the reference bus. This includes buses 11 and 13, which have only a condenser and no load.
 9. **Angle-difference limits** (±30° in the file) are not modelled. They are not in the plan's formulation. pandapower's DC-OPF gives the same base cost (7504.44 $/h).
 10. **Energy.** CodeCarbon measures at machine level, so each Ollama call is one tracker. A single DC-OPF solve (about 15 ms) is below CodeCarbon's resolution, so it is measured as 200 solves divided by 200. API calls get `None` with the reason "remote; not measurable".
-11. **Temperature on newer Claude models.** Claude Haiku 5.5 (and other current Claude models) reject a temperature value with HTTP 400. Temperature 0 is therefore sent only to models that accept it (`accepts_temperature` in `src/llm.py`), and the 3 repeats measure how much the replies vary. Haiku 5.5 also thinks before answering (adaptive thinking, default effort `medium`; set `LLM_API_EFFORT` to pin it). Thinking tokens are billed as output.
-12. **Gemini settings.** The `gemini` provider calls Google's native `generateContent` API with temperature 0, seed 42 and `maxOutputTokens` 16000. `LLM_API_EFFORT` sets `thinkingLevel`. Thinking tokens are billed as output, so they are counted in `tokens_out`. Google advises keeping Gemini 3 models at their default temperature (1.0); temperature 0 follows this project's reproducibility rule and can be revisited if replies degrade.
-13. **OpenAI reasoning models** (o-series, GPT-5 and newer) accept only their default temperature. The code therefore omits `temperature` and `seed` for them, and sends `reasoning_effort` from `LLM_API_EFFORT`. `LLM_API_TEMPERATURE` overrides this rule.
-14. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
+11. **The API model is OpenAI `gpt-5-nano`**, a reasoning model. It accepts only its default temperature, so temperature 0 and the seed are not sent to it (`openai_sampling` in `src/llm.py`; `LLM_API_TEMPERATURE` overrides this). The 3 repeats measure how much its replies vary. `LLM_API_EFFORT` is sent as `reasoning_effort`. Reasoning tokens are billed as output and are counted in `tokens_out`.
+12. **Rate limits are not a constraint.** The account allows 2,000,000 tokens/min, 5,000 requests/min and 20,000,000 tokens/day. The full study is about 620 sequential calls and about 2M tokens in total, around 1% of the daily limit. Calls run one at a time (a few seconds each), so the per-minute limits are never approached. A rate-limit reply (HTTP 429) is retried automatically with backoff.
+13. **Prompt examples** (`EXAMPLES_EDITS` in `src/agent.py`) are generic: "line L23 opened and bus 18 at 4.5 MW", and "raise the voltage at bus 3" as a refusal. **Check that none of your 40 requests matches them.** Each record stores a hash of the system prompt, so a prompt change after the freeze is visible.
 
 ## Repository layout
 

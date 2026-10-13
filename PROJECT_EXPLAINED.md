@@ -67,7 +67,7 @@ We use the **IEEE 30-bus test system**, a standard textbook grid, in the version
 
 | Term | What it means here |
 |---|---|
-| **LLM** | A language model (here Claude Haiku 5.5, or a local model through Ollama). It reads text and writes text. |
+| **LLM** | A language model: here OpenAI's **gpt-5-nano** (or a local model through Ollama). It reads text and writes text. |
 | **Prompt** | The instructions plus the grid description we send to the LLM with each request. |
 | **Network card** | A compact text table of the grid (buses, loads, generators, lines with IDs and ratings) put inside the prompt, so the LLM uses real IDs instead of inventing them. |
 | **Structured output / schema** | We force the LLM to answer in one small, fixed JSON format, not free text. That makes its answer machine-checkable. |
@@ -76,7 +76,7 @@ We use the **IEEE 30-bus test system**, a standard textbook grid, in the version
 | **Refusal** | The LLM is allowed, and expected, to say "this cannot be done safely". |
 | **Mock model** | A fake LLM that always gives the correct answer. It tests our *code*: if the mock doesn't score 100%, the bug is ours, not the AI's. |
 | **Leakage** | When test questions accidentally appear in the prompt. We guard against it automatically. |
-| **Temperature** | The randomness setting. We use 0 where the model allows it; Haiku 5.5 doesn't allow it, so we repeat every run 3 times and report the spread. |
+| **Temperature** | The randomness setting. gpt-5-nano is a reasoning model and does not accept temperature 0, so we repeat every run 3 times and report the spread. |
 
 ---
 
@@ -212,7 +212,7 @@ Every run is repeated **3 times**. Results are reported as mean ± spread.
 | Grid model, DC-OPF, DC power flow | The 40 request texts and notes ✅ |
 | Edit language, checker (10 rules), verifier | LOG.md (daily: what I did, what broke, decisions) |
 | Four modes, retry loop, explanations | Labelling each failure in `results/failures.csv` |
-| LLM connectors: mock, Ollama, Anthropic/OpenAI API | The 2-page note |
+| LLM connectors: mock, Ollama, OpenAI API (gpt-5-nano) | The 2-page note |
 | Validator, scenario table, worksheet tools | The emails to Dr. Li |
 | Grading, tables, figures, energy measurement | Running the experiments on the laptop |
 | 88 automated tests, all passing | Checking and committing each step |
@@ -247,9 +247,7 @@ results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 ## 13. Running it and what it costs
 
 - **Where it runs:** on your own laptop, with plain Python. No special app is needed.
-- **The LLM (the "brain") can be:**
-  - **Gemini 3.1 Flash-Lite** (the chosen model) through Google's Gemini API, at about $0.25 / $1.50 per million input / output tokens. The full study is about 620 calls, an **estimated ~$1.60 at most**; less if the model thinks less. A free tier with rate limits also exists.
-  - **Claude Haiku 5.5** through Anthropic's API (about $0.55 for the study), or **a local model through Ollama** (free, energy measurable, slower).
+- **The LLM (the "brain"):** OpenAI **gpt-5-nano**, at about $0.05 / $0.40 per million input / output tokens (check OpenAI's pricing page). The full study is about 620 calls and about 2M tokens, an **estimated ~$0.40**. The account limits (2M tokens/min, 5,000 requests/min, 20M tokens/day) are far above what the study needs. A local model through Ollama remains an option (free, energy measurable, slower).
 - **The API key** goes only in the `.env` file on your laptop. It is never pasted into chat and never committed to GitHub.
 - **Order of runs:** mock (must be 100%), then 10 requests on the real model (check the cost), then the full run: 40 requests × 4 modes × 3 repeats.
 
@@ -263,7 +261,7 @@ results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 | 1. Grid model + DC-OPF (verified by 3 solvers + pandapower) | ✅ done |
 | 2. Edit language + 10-rule checker | ✅ done |
 | 3. Benchmark (40 requests, 0 validator flags, mock 100% in all modes) | ✅ done |
-| 4. Real LLM, Mode 2 on 10 requests | ⏳ next: needs the API key or Ollama on the laptop |
+| 4. Real LLM (gpt-5-nano), Mode 2 on 10 requests | ⏳ next: run on the laptop with the OpenAI key |
 | 5. Modes 1, 3, 4 on 10 requests | ⏳ |
 | 6. Full run, tables, figures (then prompts and code are frozen) | ⏳ |
 | 7. Failure labels, 2-page note, email | ⏳ |
@@ -275,7 +273,7 @@ results/   day1_report.txt, scenario_table.txt, runs/, raw/, tables/, figures/
 - **DC model only:** no voltages, no reactive power, no losses. An AC check is a possible extension.
 - **One small grid (30 buses), 40 requests, 1–2 models.** This is a pilot, not a final answer.
 - **Energy is measured only for the local model.** The API's energy is not measurable from outside.
-- **Haiku 5.5 does not allow temperature 0.** Its replies can vary, which the 3 repeats measure.
+- **gpt-5-nano does not allow temperature 0.** Its replies can vary, which the 3 repeats measure.
 - **The scenarios were tool-selected.** The wording is human. This should be stated in the note.
 
 ---

@@ -1,4 +1,4 @@
-"""List the model ids your API key can use (provider and key from .env).
+"""List the OpenAI model ids your API key can use (key from .env).
 
 Usage: python scripts/list_models.py [filter]     e.g.  python scripts/list_models.py nano
 Never prints the key.

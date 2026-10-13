@@ -2,8 +2,8 @@
 
 meta = {model, latency_s, tokens_in, tokens_out, error, energy_kwh, energy_note}.
 Backends: MockLLM (ground-truth replies, pipeline tests only), ScriptedLLM
-(fixed reply list, tests), OllamaLLM (local), APILLM (Gemini, Anthropic or
-any OpenAI-compatible API). Keys come from .env and never appear in meta, logs or output.
+(fixed reply list, tests), OllamaLLM (local), APILLM (OpenAI, default model
+gpt-5-nano). Keys come from .env and never appear in meta, logs or output.
 """
 from __future__ import annotations
 
@@ -21,25 +21,13 @@ SEED = 42
 TIMEOUT_S = 300
 MAX_RETRIES = 3
 RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504, 529}
-# Claude models that reject sampling parameters (a non-default temperature is a 400).
-# On these, temperature cannot be set to 0; repeats measure the run-to-run spread.
-NO_SAMPLING_PREFIXES = ("claude-haiku-5", "claude-sonnet-5", "claude-opus-5", "claude-opus-4-7",
-                        "claude-opus-4-8", "claude-fable", "claude-mythos")
-ANTHROPIC_MAX_TOKENS = 16000  # thinking tokens count toward this limit
-GEMINI_MAX_TOKENS = 16000     # Gemini thinking tokens also count toward maxOutputTokens
-
-
+DEFAULT_API_MODEL = "gpt-5-nano"
 # OpenAI reasoning models accept only the default temperature (a value of 0 is a 400).
 OPENAI_REASONING_PREFIXES = ("o1", "o3", "o4", "gpt-5", "gpt-6")
 
 
-def accepts_temperature(model: str) -> bool:
-    """False for Claude models where a temperature value returns HTTP 400."""
-    return not model.startswith(NO_SAMPLING_PREFIXES)
-
-
 def openai_sampling(model: str) -> bool:
-    """Send temperature 0 + seed to this OpenAI-compatible model?
+    """Send temperature 0 + seed to this OpenAI model?
 
     LLM_API_TEMPERATURE overrides: '0' always sends them, 'off' never does.
     Otherwise they are skipped for OpenAI reasoning models (o-series, gpt-5+).
@@ -140,108 +128,55 @@ class OllamaLLM(LLM):
 
 
 class APILLM(LLM):
-    """Remote chat API, chosen by LLM_API_PROVIDER:
-    'gemini' (Google Gemini API, native generateContent), 'anthropic' (Messages API)
-    or 'openai' (any OpenAI-compatible /chat/completions endpoint).
-    Temperature 0 and a fixed seed wherever the provider and model accept them."""
-    name = "api"
-    DEFAULT_BASE = {"anthropic": "https://api.anthropic.com",
-                    "gemini": "https://generativelanguage.googleapis.com/v1beta",
-                    "openai": "https://api.openai.com/v1"}
+    """OpenAI Chat Completions API (default model gpt-5-nano).
 
-    def __init__(self, model: str | None = None, provider: str | None = None, base: str | None = None):
+    gpt-5-nano is a reasoning model: it accepts only its default temperature,
+    so temperature 0 and the seed are not sent (see openai_sampling), and the
+    reasoning effort comes from LLM_API_EFFORT (minimal|low|medium|high).
+    Reasoning tokens are billed as output and are included in tokens_out.
+    """
+    name = "api"
+    DEFAULT_BASE = "https://api.openai.com/v1"
+
+    def __init__(self, model: str | None = None, base: str | None = None):
         load_dotenv()
         self._key = os.getenv("LLM_API_KEY") or ""
-        self.model = model or os.getenv("LLM_API_MODEL") or ""
-        self.provider = (provider or os.getenv("LLM_API_PROVIDER") or "openai").lower()
-        if self.provider not in self.DEFAULT_BASE:
-            raise ValueError(f"LLM_API_PROVIDER must be one of {sorted(self.DEFAULT_BASE)}")
-        self.base = (base or os.getenv("LLM_API_BASE") or self.DEFAULT_BASE[self.provider]).rstrip("/")
-        # Reasoning effort. Anthropic: low|medium|high|xhigh|max. Gemini: minimal|low|medium|high.
-        # OpenAI reasoning models: minimal|low|medium|high (sent as reasoning_effort).
+        self.model = model or os.getenv("LLM_API_MODEL") or DEFAULT_API_MODEL
+        self.base = (base or os.getenv("LLM_API_BASE") or self.DEFAULT_BASE).rstrip("/")
         self.effort = os.getenv("LLM_API_EFFORT") or None
-        if not self._key or not self.model:
-            raise ValueError("LLM_API_KEY and LLM_API_MODEL must be set in .env")
+        if not self._key:
+            raise ValueError("LLM_API_KEY must be set in .env")
 
     def __repr__(self):  # never show the key
-        return f"APILLM(provider={self.provider!r}, model={self.model!r})"
+        return f"APILLM(model={self.model!r})"
 
     def complete(self, messages, request_id=None):
-        t0 = time.perf_counter()
-        call = {"anthropic": self._anthropic, "gemini": self._gemini, "openai": self._openai}[self.provider]
-        try:
-            r, err, parse = call(messages)
-            dt = time.perf_counter() - t0
-            if err or r is None:
-                return "", _meta(self.model, dt, error=err, note=energy.REMOTE_NOTE)
-            if r.status_code != 200:
-                return "", _meta(self.model, dt, error=f"HTTP {r.status_code}: {self._scrub(r.text[:300])}",
-                                 note=energy.REMOTE_NOTE)
-            text, model, tin, tout, stop_err = parse(r.json())
-            return text, _meta(model or self.model, dt, tin, tout, error=stop_err, note=energy.REMOTE_NOTE)
-        except Exception as exc:
-            return "", _meta(self.model, time.perf_counter() - t0,
-                             error=self._scrub(f"{type(exc).__name__}: {exc}"), note=energy.REMOTE_NOTE)
-
-    # ---- providers: each returns (response, error, parse_fn) -------------
-    def _anthropic(self, messages):
-        system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
-        chat = [m for m in messages if m["role"] != "system"]
-        payload = {"model": self.model, "max_tokens": ANTHROPIC_MAX_TOKENS, "system": system, "messages": chat}
-        if accepts_temperature(self.model):
-            payload["temperature"] = 0
-        if self.effort:
-            payload["output_config"] = {"effort": self.effort}
-        headers = {"x-api-key": self._key, "anthropic-version": "2023-06-01"}
-
-        def parse(d):
-            text = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
-            u = d.get("usage", {})
-            stop = d.get("stop_reason")
-            err = f"stop_reason {stop}" if stop in ("refusal", "max_tokens") else None
-            return text, d.get("model"), u.get("input_tokens"), u.get("output_tokens"), err
-        return (*_post_with_retry(f"{self.base}/v1/messages", headers, payload), parse)
-
-    def _gemini(self, messages):
-        """Native Gemini generateContent. Thought parts are skipped; thinking
-        tokens are counted in tokens_out because they are billed as output."""
-        system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
-        contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]}
-                    for m in messages if m["role"] != "system"]
-        gen = {"temperature": 0, "seed": SEED, "maxOutputTokens": GEMINI_MAX_TOKENS}
-        if self.effort:
-            gen["thinkingConfig"] = {"thinkingLevel": self.effort}
-        payload = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents, "generationConfig": gen}
-        headers = {"x-goog-api-key": self._key}
-
-        def parse(d):
-            cands = d.get("candidates") or []
-            if not cands:
-                reason = (d.get("promptFeedback") or {}).get("blockReason", "no candidates")
-                return "", d.get("modelVersion"), None, None, f"blocked: {reason}"
-            parts = (cands[0].get("content") or {}).get("parts") or []
-            text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-            u = d.get("usageMetadata", {})
-            tout = (u.get("candidatesTokenCount") or 0) + (u.get("thoughtsTokenCount") or 0)
-            finish = cands[0].get("finishReason")
-            err = None if finish in (None, "STOP") else f"finishReason {finish}"
-            return text, d.get("modelVersion"), u.get("promptTokenCount"), tout, err
-        url = f"{self.base}/models/{self.model}:generateContent"
-        return (*_post_with_retry(url, headers, payload), parse)
-
-    def _openai(self, messages):
         payload = {"model": self.model, "messages": messages}
         if openai_sampling(self.model):
             payload.update(temperature=0, seed=SEED)
         if self.effort:
             payload["reasoning_effort"] = self.effort
         headers = {"Authorization": f"Bearer {self._key}"}
-
-        def parse(d):
+        t0 = time.perf_counter()
+        try:
+            r, err = _post_with_retry(f"{self.base}/chat/completions", headers, payload)
+            dt = time.perf_counter() - t0
+            if err or r is None:
+                return "", _meta(self.model, dt, error=err, note=energy.REMOTE_NOTE)
+            if r.status_code != 200:
+                return "", _meta(self.model, dt, error=f"HTTP {r.status_code}: {self._scrub(r.text[:300])}",
+                                 note=energy.REMOTE_NOTE)
+            d = r.json()
+            choice = d["choices"][0]
             u = d.get("usage", {})
-            return (d["choices"][0]["message"].get("content") or "", d.get("model"),
-                    u.get("prompt_tokens"), u.get("completion_tokens"), None)
-        return (*_post_with_retry(f"{self.base}/chat/completions", headers, payload), parse)
+            finish = choice.get("finish_reason")
+            stop_err = None if finish in (None, "stop") else f"finish_reason {finish}"
+            return choice["message"].get("content") or "", _meta(
+                d.get("model", self.model), dt, u.get("prompt_tokens"), u.get("completion_tokens"),
+                error=stop_err, note=energy.REMOTE_NOTE)
+        except Exception as exc:
+            return "", _meta(self.model, time.perf_counter() - t0,
+                             error=self._scrub(f"{type(exc).__name__}: {exc}"), note=energy.REMOTE_NOTE)
 
     def _scrub(self, text: str) -> str:
         return text.replace(self._key, "[REDACTED]") if self._key else text
@@ -278,24 +213,14 @@ class CallLogger:
             f.write(line + "\n")
 
 
-def list_models(provider: str | None = None) -> list[str]:
-    """Model ids this account can use, asked from the provider with the key in .env."""
-    api = APILLM.__new__(APILLM)
+def list_models() -> list[str]:
+    """Model ids the OpenAI key in .env can use."""
     load_dotenv()
-    api._key = os.getenv("LLM_API_KEY") or ""
-    api.provider = (provider or os.getenv("LLM_API_PROVIDER") or "openai").lower()
-    base = (os.getenv("LLM_API_BASE") or APILLM.DEFAULT_BASE[api.provider]).rstrip("/")
-    if not api._key:
+    key = os.getenv("LLM_API_KEY") or ""
+    if not key:
         raise ValueError("LLM_API_KEY must be set in .env")
-    if api.provider == "anthropic":
-        url, headers = f"{base}/v1/models?limit=100", {"x-api-key": api._key, "anthropic-version": "2023-06-01"}
-    elif api.provider == "gemini":
-        url, headers = f"{base}/models?pageSize=1000", {"x-goog-api-key": api._key}
-    else:
-        url, headers = f"{base}/models", {"Authorization": f"Bearer {api._key}"}
-    r = requests.get(url, headers=headers, timeout=60)
+    base = (os.getenv("LLM_API_BASE") or APILLM.DEFAULT_BASE).rstrip("/")
+    r = requests.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=60)
     if r.status_code != 200:
-        raise RuntimeError(f"HTTP {r.status_code}: {api._scrub(r.text[:300])}")
-    d = r.json()
-    items = d.get("data") or d.get("models") or []
-    return sorted((m.get("id") or m.get("name", "")).removeprefix("models/") for m in items)
+        raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300].replace(key, '[REDACTED]')}")
+    return sorted(m.get("id", "") for m in r.json().get("data", []))

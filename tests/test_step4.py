@@ -77,23 +77,22 @@ def test_ollama_backend(monkeypatch):
     assert seen["payload"]["options"] == {"temperature": 0, "seed": 42}
 
 
-@pytest.mark.parametrize("provider", ["openai", "anthropic"])
-def test_api_backend_and_retry_only_on_rate_limit(monkeypatch, provider):
+def test_api_backend_and_retry_only_on_rate_limit(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
+    monkeypatch.delenv("LLM_API_TEMPERATURE", raising=False)
     monkeypatch.setattr(llm_mod.time, "sleep", lambda s: None)
     calls = []
-    ok = ({"model": "m", "content": [{"type": "text", "text": GOOD}], "usage": {"input_tokens": 5, "output_tokens": 6}}
-          if provider == "anthropic" else
-          {"model": "m", "choices": [{"message": {"content": GOOD}}], "usage": {"prompt_tokens": 5, "completion_tokens": 6}})
+    ok = {"model": "gpt-5-nano-2025-08-07", "choices": [{"message": {"content": GOOD}, "finish_reason": "stop"}],
+          "usage": {"prompt_tokens": 5, "completion_tokens": 6}}
 
     def fake_post(url, headers, json, timeout):
-        calls.append(json)
-        assert json["temperature"] == 0  # model "m" accepts sampling parameters
+        calls.append((url, json))
         return FakeResp(429, {}) if len(calls) == 1 else FakeResp(200, ok)
     monkeypatch.setattr(requests, "post", fake_post)
-    api = APILLM(model="m", provider=provider)
+    api = APILLM()  # default model gpt-5-nano
     text, meta = api.complete([{"role": "system", "content": "s"}, {"role": "user", "content": "u"}])
-    assert text == GOOD and len(calls) == 2 and meta["tokens_out"] == 6
+    assert api.model == "gpt-5-nano" and calls[0][0] == "https://api.openai.com/v1/chat/completions"
+    assert text == GOOD and len(calls) == 2 and meta["tokens_out"] == 6 and meta["model"] == "gpt-5-nano-2025-08-07"
     assert meta["energy_kwh"] is None and meta["energy_note"] == "remote; not measurable"
     assert "sk-test" not in repr(api)
 
@@ -102,72 +101,28 @@ def test_api_never_retries_on_content(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
     calls = []
     monkeypatch.setattr(requests, "post", lambda *a, **k: calls.append(1) or FakeResp(
-        200, {"choices": [{"message": {"content": "garbage"}}], "usage": {}}))
-    text, _ = APILLM(model="m", provider="openai").complete([{"role": "user", "content": "u"}])
+        200, {"choices": [{"message": {"content": "garbage"}, "finish_reason": "stop"}], "usage": {}}))
+    text, _ = APILLM().complete([{"role": "user", "content": "u"}])
     assert text == "garbage" and len(calls) == 1
 
 
-def test_anthropic_haiku_5_5_request_shape(monkeypatch):
-    """Claude Haiku 5.5 rejects temperature, so it must not be sent; refusals are errors."""
+def test_api_truncated_reply_is_an_error(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
-    monkeypatch.setenv("LLM_API_EFFORT", "low")
-    sent = []
-    body = {"model": "claude-haiku-5-5", "stop_reason": "end_turn", "usage": {"input_tokens": 9, "output_tokens": 3},
-            "content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": GOOD}]}
-    monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: sent.append((url, headers, json)) or FakeResp(200, body))
-    text, meta = APILLM(model="claude-haiku-5-5", provider="anthropic").complete(
-        [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}])
-    url, headers, payload = sent[0]
-    assert url == "https://api.anthropic.com/v1/messages" and headers["x-api-key"] == "sk-test-key-000000"
-    assert "temperature" not in payload and payload["output_config"] == {"effort": "low"}
-    assert payload["system"] == "s" and payload["messages"] == [{"role": "user", "content": "u"}]
-    assert text == GOOD and meta["model"] == "claude-haiku-5-5" and meta["error"] is None
-    body["stop_reason"] = "refusal"
-    assert APILLM(model="claude-haiku-5-5", provider="anthropic").complete([{"role": "user", "content": "u"}])[1]["error"] == "stop_reason refusal"
-
-
-def test_gemini_request_shape(monkeypatch):
-    """Native Gemini call: system instruction, model role for assistant turns,
-    temperature 0 + seed, thinking level, thought parts skipped, thinking tokens counted."""
-    monkeypatch.setenv("LLM_API_KEY", "AIza-test-key-000000")
-    monkeypatch.setenv("LLM_API_EFFORT", "low")
-    sent = []
-    body = {"modelVersion": "gemini-3.1-flash-lite",
-            "candidates": [{"finishReason": "STOP", "content": {"role": "model", "parts": [
-                {"text": "hidden reasoning", "thought": True}, {"text": GOOD}]}}],
-            "usageMetadata": {"promptTokenCount": 1200, "candidatesTokenCount": 40, "thoughtsTokenCount": 60}}
-    monkeypatch.setattr(requests, "post",
-                        lambda url, headers, json, timeout: sent.append((url, headers, json)) or FakeResp(200, body))
-    api = APILLM(model="gemini-3.1-flash-lite", provider="gemini")
-    text, meta = api.complete([{"role": "system", "content": "s"}, {"role": "user", "content": "u"},
-                               {"role": "assistant", "content": "a"}, {"role": "user", "content": "fix it"}])
-    url, headers, payload = sent[0]
-    assert url == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
-    assert headers == {"x-goog-api-key": "AIza-test-key-000000"} and "AIza" not in url
-    assert payload["systemInstruction"] == {"parts": [{"text": "s"}]}
-    assert [c["role"] for c in payload["contents"]] == ["user", "model", "user"]
-    assert payload["generationConfig"]["temperature"] == 0 and payload["generationConfig"]["seed"] == 42
-    assert payload["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
-    assert text == GOOD and meta["tokens_in"] == 1200 and meta["tokens_out"] == 100 and meta["error"] is None
-    body["candidates"][0]["finishReason"] = "MAX_TOKENS"
-    assert api.complete([{"role": "user", "content": "u"}])[1]["error"] == "finishReason MAX_TOKENS"
-    body.pop("candidates")
-    body["promptFeedback"] = {"blockReason": "SAFETY"}
-    assert api.complete([{"role": "user", "content": "u"}])[1]["error"] == "blocked: SAFETY"
+    monkeypatch.setattr(requests, "post", lambda *a, **k: FakeResp(
+        200, {"choices": [{"message": {"content": ""}, "finish_reason": "length"}], "usage": {}}))
+    assert APILLM().complete([{"role": "user", "content": "u"}])[1]["error"] == "finish_reason length"
 
 
 def test_check_api_script(monkeypatch, capsys):
     import runpy
-    monkeypatch.setenv("LLM_API_KEY", "AIza-test-key-000000")
-    monkeypatch.setenv("LLM_API_PROVIDER", "gemini")
-    monkeypatch.setenv("LLM_API_MODEL", "gemini-3.1-flash-lite")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test-key-000000")
     reply = '{"edits": [], "refuse": true, "reason": "test"}'
-    body = {"modelVersion": "gemini-3.1-flash-lite", "usageMetadata": {"promptTokenCount": 20, "candidatesTokenCount": 9},
-            "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": reply}]}}]}
+    body = {"model": "gpt-5-nano", "usage": {"prompt_tokens": 20, "completion_tokens": 9},
+            "choices": [{"message": {"content": reply}, "finish_reason": "stop"}]}
     monkeypatch.setattr(requests, "post", lambda *a, **k: FakeResp(200, body))
     runpy.run_path("scripts/check_api.py", run_name="__main__")
     out = capsys.readouterr().out
-    assert "parses as edit JSON: yes" in out and "AIza" not in out
+    assert "parses as edit JSON: yes" in out and "sk-test" not in out
 
 
 def test_openai_reasoning_model_gets_no_temperature(monkeypatch):
@@ -175,13 +130,16 @@ def test_openai_reasoning_model_gets_no_temperature(monkeypatch):
     monkeypatch.setenv("LLM_API_EFFORT", "low")
     monkeypatch.delenv("LLM_API_TEMPERATURE", raising=False)
     sent = []
-    ok = {"model": "gpt-5-nano", "choices": [{"message": {"content": GOOD}}], "usage": {"prompt_tokens": 5, "completion_tokens": 6}}
+    ok = {"model": "gpt-5-nano", "choices": [{"message": {"content": GOOD}, "finish_reason": "stop"}],
+          "usage": {"prompt_tokens": 5, "completion_tokens": 6}}
     monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: sent.append(json) or FakeResp(200, ok))
-    APILLM(model="gpt-5-nano", provider="openai").complete([{"role": "user", "content": "u"}])
+    APILLM(model="gpt-5-nano").complete([{"role": "user", "content": "u"}])
     assert "temperature" not in sent[0] and "seed" not in sent[0] and sent[0]["reasoning_effort"] == "low"
-    monkeypatch.setenv("LLM_API_TEMPERATURE", "0")
-    APILLM(model="gpt-5-nano", provider="openai").complete([{"role": "user", "content": "u"}])
+    APILLM(model="gpt-4.1-nano").complete([{"role": "user", "content": "u"}])
     assert sent[1]["temperature"] == 0 and sent[1]["seed"] == 42
+    monkeypatch.setenv("LLM_API_TEMPERATURE", "0")
+    APILLM(model="gpt-5-nano").complete([{"role": "user", "content": "u"}])
+    assert sent[2]["temperature"] == 0 and sent[2]["seed"] == 42
 
 
 def test_list_models(monkeypatch):
@@ -196,5 +154,5 @@ def test_list_models(monkeypatch):
         def json(self):
             return {"data": [{"id": "gpt-b"}, {"id": "gpt-a"}]}
     monkeypatch.setattr(requests, "get", lambda url, headers, timeout: seen.update(url=url, h=headers) or R())
-    assert list_models("openai") == ["gpt-a", "gpt-b"]
+    assert list_models() == ["gpt-a", "gpt-b"]
     assert seen["url"] == "https://api.openai.com/v1/models" and seen["h"]["Authorization"].startswith("Bearer ")
