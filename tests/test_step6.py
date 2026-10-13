@@ -156,3 +156,14 @@ def test_rebuild_runs_replays_logged_replies(net, tmp_path):
     for k in ("outcome", "retries_used", "canonical_diff", "cost", "pg"):
         assert recs[0][k] == original[k]
     assert _json.loads((tmp_path / "runs" / "api_m3_r1.jsonl").read_text(encoding="utf-8"))["repeat"] == 1
+
+
+def test_failures_helper_columns(net):
+    """expected and violations columns help the researcher label; my_label stays empty."""
+    import export_failures as ef
+    from src.dcopf import solve_dcopf
+    item = {"id": "T3", "refuse": False, "note": "", "edits": [{"action": "set_line_status", "line": "L2", "status": "out"}]}
+    rec = {"id": "T3", "mode": 1, "outcome": "dispatched", "refuse": False, "pg": solve_dcopf(net)["pg"], "repeat": 1}
+    rows = ef.failure_rows([rec], [item], [{"id": "T3", "group": "outage", "text": "1-3 tripped"}], net)
+    assert rows[0]["expected"] == '{"L2.status": 0}'
+    assert rows[0]["violations"].startswith("L1 ") and rows[0]["my_label"] == ""

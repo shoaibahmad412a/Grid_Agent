@@ -12,11 +12,28 @@ import os
 import _common  # noqa: F401
 from _common import CASE, REQUESTS, RESULTS, TRUTH
 
+from src.dcpf import dc_power_flow
 from src.evaluate import load_runs, read_jsonl, score_record
 from src.network import load_case
 
 COLUMNS = ["backend", "model", "mode", "repeat", "request_id", "group", "request_text", "outcome",
-           "raw_reply", "checker_messages", "canonical_diff", "my_label"]
+           "raw_reply", "refusal_reason", "checker_messages", "canonical_diff", "expected", "violations",
+           "my_label"]
+# Helper columns for labelling (filled by the script, never a label):
+#   expected   - the ground-truth effect on the grid (canonical diff), or REFUSE
+#   violations - for a dispatch, the limits it breaks on the TRUE grid (lines in MW, units in MW)
+
+
+def violations(rec, item, cache) -> str:
+    """Limits a dispatch breaks on the true grid, e.g. 'L1 179.3/138 MW; G1 283.4 > max 271 MW'."""
+    if item.get("refuse") or not rec.get("pg") or rec["id"] not in cache:
+        return ""
+    pf = dc_power_flow(cache[rec["id"]][0], rec["pg"])
+    if pf.get("status") != "ok":
+        return pf.get("status", "")
+    parts = [f"{v['line']} {abs(v['flow_mw']):.1f}/{v['rate_mw']:g} MW" for v in pf["line_violations"]]
+    parts += [f"{v['gen']} {v['pg_mw']:.1f} MW outside {v['pmin_mw']:g}-{v['pmax_mw']:g}" for v in pf["gen_violations"]]
+    return "; ".join(parts) or "none"
 
 
 def failure_rows(records, truth, requests, net):
@@ -30,6 +47,8 @@ def failure_rows(records, truth, requests, net):
         if s["success"]:
             continue
         msgs = [i["message"] for a in rec.get("attempts", []) for i in a.get("issues", [])]
+        item = by_id[rec["id"]]
+        expected = "REFUSE" if item.get("refuse") else json.dumps(cache[rec["id"]][1])
         rows.append({
             "backend": rec.get("backend"), "model": rec.get("model"), "mode": rec["mode"],
             "repeat": rec.get("repeat"), "request_id": rec["id"],
@@ -37,6 +56,9 @@ def failure_rows(records, truth, requests, net):
             "request_text": text.get(rec["id"], {}).get("text", ""), "outcome": rec.get("outcome"),
             "raw_reply": rec.get("raw_reply"), "checker_messages": " | ".join(msgs),
             "canonical_diff": json.dumps(rec.get("canonical_diff")) if rec.get("canonical_diff") is not None else "",
+            "refusal_reason": rec.get("reason", "") if rec.get("refuse") else "",
+            "expected": expected,
+            "violations": violations(rec, item, cache),
             "my_label": "",
         })
     return rows
