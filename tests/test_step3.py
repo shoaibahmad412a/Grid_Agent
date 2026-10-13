@@ -63,3 +63,27 @@ def test_scenario_table_verdicts():
     assert st.evaluate([{"action": "set_line_status", "line": "L1", "status": "out"}])[0] == "R10"
     assert st.evaluate([{"action": "set_line_status", "line": "L38", "status": "out"}])[0] == "OK"
     assert 1.28 < st.max_load_factor(5) < 1.30
+
+
+def test_worksheet_rows_are_valid(net):
+    import make_worksheet as mw
+    proofs = mw.verify(net)
+    groups = [r[0] for r in mw.ROWS]
+    assert [groups.count(g) for g in ("outage", "gen", "load", "combined", "impossible")] == [10, 10, 8, 6, 6]
+    assert sorted(p for p, g in zip(proofs, groups) if g == "impossible") == sorted(
+        ["R2_UNKNOWN_ID", "R4_NAMEPLATE", "R5_UPRATE", "R8_ISLANDING", "R9_ADEQUACY", "R10_INFEASIBLE"])
+
+
+def test_worksheet_converter_copies_words_and_needs_every_cell():
+    import pytest
+    from worksheet_to_benchmark import convert
+    row = {"id": "R01", "group": "outage", "edits": '[{"action": "set_line_status", "line": "L7", "status": "out"}]',
+           "probe_edits": "", "text": "  My own words  ", "note": "L7 is 4-6"}
+    reqs, truth = convert([row])
+    assert reqs == [{"id": "R01", "group": "outage", "text": "My own words"}]
+    assert truth[0]["refuse"] is False and truth[0]["edits"][0]["line"] == "L7"
+    with pytest.raises(ValueError, match="R01"):
+        convert([{**row, "text": ""}])
+    imp = {**row, "group": "impossible", "edits": "[]", "probe_edits": '[{"action": "set_line_status", "line": "L45", "status": "out"}]'}
+    assert convert([imp])[1][0] == {"id": "R01", "refuse": True, "edits": [], "note": "L7 is 4-6",
+                                    "probe_edits": [{"action": "set_line_status", "line": "L45", "status": "out"}]}
